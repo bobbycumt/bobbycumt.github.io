@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSP-J 蛇形排座算法演示</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f7f6;
+            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .container {
+            background: white;
+            max-width: 790px;
+            width: 100%;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h2 {
+            margin-top: 0;
+            color: #2c3e50;
+            text-align: center;
+            width: 100%;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+
+        /* 控制面板 */
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 20px;
+            width: 100%;
+            margin-bottom: 20px;
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            font-weight: bold;
+            font-size: 15px;
+            color: #495057;
+        }
+
+        .control-group input[type=range] {
+            margin: 0 10px;
+            cursor: pointer;
+            width: 120px;
+        }
+        
+        /* 针对 Rank 滑块加宽 */
+        #rankSlider {
+            width: 200px;
+            accent-color: #e74c3c;
+        }
+
+        .val-badge {
+            display: inline-block;
+            min-width: 25px;
+            text-align: center;
+            background: #e9ecef;
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: #212529;
+        }
+
+        /* 网格展示区 */
+        .grid-wrapper {
+            width: 100%;
+            overflow-x: auto; /* 防止列数过多撑破页面 */
+            padding: 10px 0;
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        .grid {
+            display: grid;
+            gap: 4px;
+            background: #dee2e6;
+            padding: 4px;
+            border-radius: 6px;
+        }
+
+        .cell {
+            width: 45px;
+            height: 45px;
+            background: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: bold;
+            color: #adb5bd;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        /* 路径高亮样式 */
+        .cell.path {
+            background: #d0ebff;
+            color: #1864ab;
+        }
+
+        /* 当前目标高亮样式 */
+        .cell.target {
+            background: #ffe3e3;
+            color: #e03131;
+            box-shadow: 0 0 0 2px #fa5252 inset;
+            transform: scale(1.05);
+            z-index: 2;
+        }
+        
+        .cell.target::after {
+            content: '小R';
+            position: absolute;
+            bottom: 2px;
+            font-size: 10px;
+            color: #c92a2a;
+        }
+
+        /* 数学演算区 */
+        .formula-box {
+            width: 100%;
+            background-color: #f8f9fa;
+            border-left: 5px solid #3b5bdb;
+            padding: 15px 20px;
+            border-radius: 4px;
+            font-size: 16px;
+            line-height: 1.8;
+            box-sizing: border-box;
+            color: #343a40;
+        }
+
+        .math-var {
+            font-family: 'Courier New', Courier, monospace;
+            background: #e9ecef;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: bold;
+            color: #d9480f;
+        }
+
+        .result-highlight {
+            font-size: 18px;
+            font-weight: bold;
+            color: #3b5bdb;
+        }
+        
+        .math-row {
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>蛇形排座：一维排名转二维坐标</h2>
+    
+    <div class="controls">
+        <div class="control-group">
+            行数 N: <input type="range" id="nSlider" min="1" max="10" value="4">
+            <span class="val-badge" id="nVal">4</span>
+        </div>
+        <div class="control-group">
+            列数 M: <input type="range" id="mSlider" min="1" max="10" value="5">
+            <span class="val-badge" id="mVal">5</span>
+        </div>
+        <div class="control-group" style="width: 100%; justify-content: center; margin-top: 10px;">
+            小 R 的排名 (0 到 N×M-1): 
+            <input type="range" id="rankSlider" min="0" max="19" value="7">
+            <span class="val-badge" id="rankVal" style="background:#ffe3e3; color:#e03131;">7</span>
+        </div>
+    </div>
+
+    <div class="grid-wrapper">
+        <div class="grid" id="gridContainer">
+            </div>
+    </div>
+
+    <div class="formula-box" id="formulaBox">
+        </div>
+</div>
+
+<script>
+    // 初始状态
+    let N = 4;
+    let M = 5;
+    let Rank = 7;
+
+    // 获取 DOM
+    const nSlider = document.getElementById('nSlider');
+    const mSlider = document.getElementById('mSlider');
+    const rankSlider = document.getElementById('rankSlider');
+    const nVal = document.getElementById('nVal');
+    const mVal = document.getElementById('mVal');
+    const rankVal = document.getElementById('rankVal');
+    const gridContainer = document.getElementById('gridContainer');
+    const formulaBox = document.getElementById('formulaBox');
+
+    // 渲染主函数
+    function render() {
+        // 更新最大 Rank 限制
+        const maxRank = N * M - 1;
+        rankSlider.max = maxRank;
+        if (Rank > maxRank) {
+            Rank = maxRank;
+            rankSlider.value = Rank;
+        }
+
+        // 更新文本标签
+        nVal.innerText = N;
+        mVal.innerText = M;
+        rankVal.innerText = Rank;
+
+        // 设置 CSS Grid
+        gridContainer.style.gridTemplateColumns = `repeat(${M}, 45px)`;
+        gridContainer.style.gridTemplateRows = `repeat(${N}, 45px)`;
+        gridContainer.innerHTML = '';
+
+        // 核心数学计算
+        const c = Math.floor(Rank / N) + 1; // 列号 (1-based)
+        const offset = Rank % N;            // 列内偏移量 (0 到 N-1)
+        let r;                              // 行号 (1-based)
+        let isOddCol = (c % 2 !== 0);
+        
+        if (isOddCol) {
+            r = offset + 1; // 奇数列：从上往下
+        } else {
+            r = N - offset; // 偶数列：从下往上
+        }
+
+        // 循环生成格子
+        for (let i = 0; i <= maxRank; i++) {
+            const cell = document.createElement('div');
+            
+            // 计算当前格子 i 的坐标，用于在 CSS Grid 中定位
+            let curC = Math.floor(i / N) + 1;
+            let curR = (curC % 2 !== 0) ? (i % N) + 1 : N - (i % N);
+
+            cell.className = 'cell';
+            cell.innerText = i;
+            cell.style.gridColumn = curC;
+            cell.style.gridRow = curR;
+
+            // 样式高亮
+            if (i === Rank) {
+                cell.classList.add('target');
+            } else if (i < Rank) {
+                cell.classList.add('path');
+            }
+
+            gridContainer.appendChild(cell);
+        }
+
+        // 更新演算过程说明
+        let directionText = isOddCol ? "奇数列 (从上往下)" : "偶数列 (从下往上)";
+        let rowFormulaText = isOddCol ? `${offset} + 1` : `${N} - ${offset}`;
+
+        formulaBox.innerHTML = `
+            <div class="math-row">
+                1. <strong>计算列号 (c)</strong>：完整填满了多少列？<br>
+                &nbsp;&nbsp;&nbsp;c = ⌊ Rank / N ⌋ + 1 = ⌊ <span class="math-var">${Rank}</span> / <span class="math-var">${N}</span> ⌋ + 1 = <span class="result-highlight">${c}</span>
+            </div>
+            <div class="math-row">
+                2. <strong>计算列内偏移量 (offset)</strong>：在当前列排第几个？(从0开始)<br>
+                &nbsp;&nbsp;&nbsp;offset = Rank % N = <span class="math-var">${Rank}</span> % <span class="math-var">${N}</span> = <span class="math-var">${offset}</span>
+            </div>
+            <div class="math-row">
+                3. <strong>计算行号 (r)</strong>：方向是？<br>
+                &nbsp;&nbsp;&nbsp;当前在第 <span class="math-var">${c}</span> 列，属于 <strong>${directionText}</strong><br>
+                &nbsp;&nbsp;&nbsp;r = ${rowFormulaText} = <span class="result-highlight">${r}</span>
+            </div>
+            <div style="margin-top: 10px; border-top: 1px dashed #ced4da; padding-top: 10px;">
+                <strong>结论：</strong> 排名为 ${Rank} 的小 R，座位坐标为第 <span class="result-highlight">${c}</span> 列，第 <span class="result-highlight">${r}</span> 行。
+            </div>
+        `;
+    }
+
+    // 事件监听
+    nSlider.addEventListener('input', (e) => { N = parseInt(e.target.value); render(); });
+    mSlider.addEventListener('input', (e) => { M = parseInt(e.target.value); render(); });
+    rankSlider.addEventListener('input', (e) => { Rank = parseInt(e.target.value); render(); });
+
+    // 初始化渲染
+    render();
+</script>
+
+</body>
+</html>

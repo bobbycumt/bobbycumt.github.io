@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数位剥离算法演示</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f7f6;
+            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .container {
+            background: white;
+            max-width: 790px;
+            width: 100%;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+        }
+
+        h2 { margin-top: 0; color: #2c3e50; text-align: center; border-bottom: 2px solid #eee; padding-bottom: 10px; font-size: 22px; }
+
+        /* 控制区 */
+        .controls { display: flex; justify-content: center; align-items: center; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;}
+        input[type="number"] { padding: 8px 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 4px; width: 150px; font-family: monospace; }
+        button { padding: 8px 15px; border: none; border-radius: 4px; font-size: 14px; cursor: pointer; font-weight: bold; transition: all 0.2s; }
+        .btn-set { background-color: #9b59b6; color: white; }
+        .btn-set:hover { background-color: #8e44ad; }
+        .btn-step { background-color: #e67e22; color: white; }
+        .btn-step:hover { background-color: #d35400; }
+        .btn-play { background-color: #3498db; color: white; }
+        .btn-play:hover { background-color: #2980b9; }
+        .btn-reset { background-color: #95a5a6; color: white; }
+        button:disabled { background-color: #bdc3c7; cursor: not-allowed; transform: none; }
+
+        /* 内容分栏 */
+        .content-panel {
+            display: flex;
+            gap: 20px;
+            align-items: stretch;
+            margin-bottom: 15px;
+        }
+
+        /* 左侧：代码区 */
+        .code-box {
+            flex: 1;
+            background: #282c34;
+            color: #abb2bf;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 15px;
+            line-height: 1.6;
+            overflow-x: auto;
+        }
+        .code-line {
+            padding: 2px 5px;
+            border-radius: 4px;
+            transition: background 0.2s;
+            border-left: 3px solid transparent;
+        }
+        .code-line.active {
+            background: #3e4451;
+            color: #fff;
+            border-left-color: #61afef;
+        }
+        .kw { color: #c678dd; } /* keyword */
+        .op { color: #56b6c2; } /* operator */
+        .var { color: #e06c75; } /* variable */
+        .num { color: #d19a66; } /* number */
+        .str { color: #98c379; } /* string */
+
+        /* 右侧：变量状态区 */
+        .state-box {
+            flex: 1;
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .var-panel {
+            background: white;
+            padding: 10px;
+            border-radius: 6px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            border-left: 4px solid #3498db;
+        }
+        .var-name { font-size: 14px; font-weight: bold; color: #7f8c8d; margin-bottom: 5px; }
+        
+        /* 动态数字展示区 */
+        .digit-group {
+            display: flex;
+            gap: 4px;
+            font-size: 24px;
+            font-family: monospace;
+            font-weight: bold;
+            min-height: 35px;
+            align-items: center;
+        }
+        .digit-box {
+            background: #eef2f5;
+            color: #2c3e50;
+            padding: 2px 8px;
+            border-radius: 4px;
+            border: 1px solid #bdc3c7;
+            transition: all 0.3s;
+        }
+        .digit-box.highlight {
+            background: #ffeaa7;
+            color: #d35400;
+            border-color: #f1c40f;
+            transform: scale(1.1);
+            box-shadow: 0 2px 8px rgba(241, 196, 15, 0.4);
+        }
+        .digit-box.faded {
+            opacity: 0.2;
+            text-decoration: line-through;
+        }
+
+        /* 底部输出区 */
+        .output-box {
+            background: #2c3e50;
+            color: #2ecc71;
+            padding: 12px 15px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 18px;
+            min-height: 50px;
+            display: flex;
+            align-items: center;
+            font-weight: bold;
+            letter-spacing: 2px;
+        }
+        .output-label { color: #bdc3c7; font-size: 14px; margin-right: 10px; font-weight: normal; letter-spacing: normal;}
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>数位剥离算法演示</h2>
+    
+    <div class="controls">
+        <input type="number" id="inputNum" value="123" min="1" max="999999999" placeholder="输入整数 n">
+        <button class="btn-set" onclick="setNumber()">确认数字</button>
+        <button class="btn-step" id="btnStep" onclick="nextStep()">👣 单步执行</button>
+        <button class="btn-play" id="btnPlay" onclick="autoPlay()">▶ 自动播放</button>
+        <button class="btn-reset" onclick="resetAll()">重置</button>
+    </div>
+
+    <div class="content-panel">
+        <div class="code-box">
+<div class="code-line" id="line-0"><span class="kw">int</span> <span class="var">n</span> <span class="op">=</span> <span id="code-n-init" class="num">123</span>;</div>
+<div class="code-line" id="line-1"><span class="kw">while</span> (<span class="var">n</span> <span class="op">></span> <span class="num">0</span>) {</div>
+<div class="code-line" id="line-2">&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">int</span> <span class="var">digit</span> <span class="op">=</span> <span class="var">n</span> <span class="op">%</span> <span class="num">10</span>;</div>
+<div class="code-line" id="line-3">&nbsp;&nbsp;&nbsp;&nbsp;<span class="var">cout</span> <span class="op"><<</span> <span class="var">digit</span> <span class="op"><<</span> <span class="str">" "</span>;</div>
+<div class="code-line" id="line-4">&nbsp;&nbsp;&nbsp;&nbsp;<span class="var">n</span> <span class="op">=</span> <span class="var">n</span> <span class="op">/</span> <span class="num">10</span>;</div>
+<div class="code-line" id="line-5">}</div>
+        </div>
+
+        <div class="state-box">
+            <div class="var-panel">
+                <div class="var-name">当前 n 的值 (内部结构)</div>
+                <div class="digit-group" id="n-display">
+                    </div>
+            </div>
+            
+            <div class="var-panel" style="border-left-color: #e67e22;">
+                <div class="var-name">当前分离出的位 (digit)</div>
+                <div class="digit-group" style="color: #d35400;" id="digit-display">
+                    ?
+                </div>
+            </div>
+            
+            <div class="var-panel" style="border-left-color: #9b59b6; background: #fdfbfd;">
+                <div class="var-name">数学计算解析</div>
+                <div id="math-explanation" style="font-family: monospace; font-size: 13px; color: #555;">
+                    等待执行...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="output-box" id="outputConsole">
+        <span class="output-label">控制台输出 ></span> <span id="console-text"></span>
+    </div>
+</div>
+
+<script>
+    let originalN = "123";
+    let nString = "123";
+    let outputStr = "";
+    
+    // 执行状态机: 0: check while, 1: digit = n%10, 2: cout, 3: n = n/10
+    let state = -1; 
+    let isDone = false;
+    let autoTimer = null;
+
+    function initNumberUI() {
+        const display = document.getElementById('n-display');
+        display.innerHTML = '';
+        for (let i = 0; i < nString.length; i++) {
+            const box = document.createElement('div');
+            box.className = 'digit-box';
+            box.id = `n-char-${i}`;
+            box.innerText = nString[i];
+            display.appendChild(box);
+        }
+        document.getElementById('code-n-init').innerText = originalN;
+        document.getElementById('digit-display').innerText = '?';
+        document.getElementById('console-text').innerText = '';
+        document.getElementById('math-explanation').innerHTML = `初始值 n = ${originalN}`;
+    }
+
+    function setNumber() {
+        let val = document.getElementById('inputNum').value;
+        if (!val || parseInt(val) <= 0) {
+            alert("请输入大于 0 的整数");
+            return;
+        }
+        originalN = parseInt(val).toString();
+        resetAll();
+    }
+
+    function resetAll() {
+        clearTimeout(autoTimer);
+        nString = originalN;
+        outputStr = "";
+        state = 0;
+        isDone = false;
+        
+        document.querySelectorAll('.code-line').forEach(line => line.classList.remove('active'));
+        document.getElementById('btnStep').disabled = false;
+        document.getElementById('btnPlay').disabled = false;
+        
+        initNumberUI();
+        document.getElementById('line-0').classList.add('active'); // 停在初始化
+    }
+
+    function nextStep() {
+        if (isDone) return;
+        
+        // 清除上一行高亮
+        document.querySelectorAll('.code-line').forEach(line => line.classList.remove('active'));
+        // 清除数字块的高亮状态
+        document.querySelectorAll('.digit-box').forEach(box => box.classList.remove('highlight'));
+
+        if (state === 0) {
+            // While 条件判断
+            document.getElementById('line-1').classList.add('active');
+            
+            if (nString.length > 0) {
+                document.getElementById('math-explanation').innerHTML = `条件判断: n = ${nString}<br><span style="color:#2ecc71; font-weight:bold;">${nString} > 0 成立，进入循环</span>`;
+                state = 1;
+            } else {
+                document.getElementById('math-explanation').innerHTML = `条件判断: n = 0<br><span style="color:#e74c3c; font-weight:bold;">0 > 0 不成立，退出循环</span>`;
+                isDone = true;
+                document.getElementById('line-5').classList.add('active'); // 结束括号
+                document.getElementById('btnStep').disabled = true;
+                document.getElementById('btnPlay').disabled = true;
+            }
+        } 
+        else if (state === 1) {
+            // 取模 digit = n % 10
+            document.getElementById('line-2').classList.add('active');
+            
+            let lastChar = nString[nString.length - 1];
+            let lastBox = document.getElementById(`n-char-${nString.length - 1}`);
+            if (lastBox) lastBox.classList.add('highlight');
+            
+            document.getElementById('digit-display').innerText = lastChar;
+            document.getElementById('math-explanation').innerHTML = `取余运算 (获取个位):<br>digit = ${nString} % 10 = <span style="color:#d35400; font-weight:bold;">${lastChar}</span>`;
+            
+            state = 2;
+        }
+        else if (state === 2) {
+            // 输出 cout
+            document.getElementById('line-3').classList.add('active');
+            
+            let lastChar = nString[nString.length - 1];
+            outputStr += lastChar + " ";
+            document.getElementById('console-text').innerText = outputStr;
+            
+            document.getElementById('math-explanation').innerHTML = `将拿到的 digit (<span style="color:#d35400; font-weight:bold;">${lastChar}</span>) 打印到控制台屏幕。`;
+            
+            state = 3;
+        }
+        else if (state === 3) {
+            // 整除砍掉个位 n = n / 10
+            document.getElementById('line-4').classList.add('active');
+            
+            let oldN = nString;
+            // 砍掉最后一位
+            let lastBox = document.getElementById(`n-char-${nString.length - 1}`);
+            if(lastBox) lastBox.className = 'digit-box faded'; // 变成虚影
+            
+            nString = nString.slice(0, -1);
+            let newNStr = nString === "" ? "0" : nString;
+            
+            document.getElementById('math-explanation').innerHTML = `整除运算 (砍掉个位):<br>n = ${oldN} / 10 = <span style="color:#2980b9; font-weight:bold;">${newNStr}</span><br>由于是整数除法，末尾被舍弃。`;
+            document.getElementById('digit-display').innerText = '?';
+            
+            state = 0; // 回到条件判断
+        }
+    }
+
+    function autoPlay() {
+        document.getElementById('btnPlay').disabled = true;
+        document.getElementById('btnStep').disabled = true;
+        
+        function loop() {
+            if (!isDone) {
+                nextStep();
+                autoTimer = setTimeout(loop, 900); // 间隔时间，适合观察高亮
+            } else {
+                document.getElementById('btnPlay').disabled = false;
+                document.getElementById('btnStep').disabled = false;
+            }
+        }
+        loop();
+    }
+
+    // 初始化加载
+    window.onload = resetAll;
+
+</script>
+</body>
+</html>

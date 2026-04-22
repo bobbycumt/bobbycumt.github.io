@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UART 串口时序仿真器</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #0f172a; color: #f8fafc; font-family: system-ui, -apple-system, sans-serif; }
+        .bit-box { transition: all 0.2s ease; }
+        .bit-box.active { transform: scale(1.1); box-shadow: 0 0 15px rgba(56, 189, 248, 0.6); border-color: #38bdf8; background-color: rgba(56, 189, 248, 0.1); }
+        canvas { background: #020617; border: 1px solid #334155; border-radius: 0.5rem; box-shadow: inset 0 0 20px rgba(0,0,0,0.8); }
+        .neon-text { text-shadow: 0 0 5px rgba(56, 189, 248, 0.5); }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center p-8">
+
+    <div class="w-full max-w-5xl space-y-6">
+        <div class="flex items-end justify-between border-b border-slate-700 pb-4">
+            <div>
+                <h1 class="text-3xl font-bold text-sky-400 flex items-center gap-3">
+                    <i class="fas fa-microchip"></i> UART 串口时序仿真器
+                </h1>
+                <p class="text-slate-400 mt-2">观察数据如何转换为微观电平脉冲 (遵循 LSB 低位在前原则)</p>
+            </div>
+        </div>
+
+        <div class="bg-slate-800 rounded-xl p-6 shadow-xl border border-slate-700 flex flex-wrap gap-6 items-end">
+            <div class="space-y-2 flex-1 min-w-[200px]">
+                <label class="block text-sm font-medium text-slate-300">输入十六进制数据 (Hex)</label>
+                <div class="relative">
+                    <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500">0x</span>
+                    <input type="text" id="hexInput" value="56" maxlength="2" 
+                        class="w-full bg-slate-900 border border-slate-600 rounded-lg pl-9 pr-4 py-2 text-sky-300 font-mono text-lg focus:outline-none focus:border-sky-500 uppercase">
+                </div>
+            </div>
+
+            <div class="space-y-2 flex-1 min-w-[200px]">
+                <label class="block text-sm font-medium text-slate-300">奇偶校验位</label>
+                <select id="paritySelect" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2 text-sky-300 focus:outline-none focus:border-sky-500">
+                    <option value="none">无校验 (None)</option>
+                    <option value="odd">奇校验 (Odd)</option>
+                    <option value="even">偶校验 (Even)</option>
+                </select>
+            </div>
+
+            <div class="space-y-2 flex-none">
+                <label class="block text-sm font-medium text-slate-300">模拟环境</label>
+                <label class="flex items-center gap-2 cursor-pointer bg-slate-900 border border-slate-600 rounded-lg px-4 py-2">
+                    <input type="checkbox" id="noiseToggle" class="w-4 h-4 text-sky-500 rounded bg-slate-800 border-slate-600">
+                    <span class="text-slate-300"><i class="fas fa-bolt text-yellow-400"></i> 引入电磁干扰</span>
+                </label>
+            </div>
+
+            <button id="startBtn" class="bg-sky-500 hover:bg-sky-400 text-slate-900 font-bold py-2 px-6 rounded-lg transition-colors flex items-center gap-2 h-[42px]">
+                <i class="fas fa-play"></i> 开始传输
+            </button>
+        </div>
+
+        <div class="space-y-3">
+            <div class="flex justify-between items-center">
+                <h2 class="text-xl font-semibold text-slate-200">数据帧结构解析</h2>
+                <span id="statusText" class="text-sky-400 font-mono bg-sky-900/30 px-3 py-1 rounded border border-sky-800">就绪</span>
+            </div>
+            <div id="frameContainer" class="flex gap-2 overflow-x-auto pb-2">
+                </div>
+        </div>
+
+        <div class="space-y-3">
+            <h2 class="text-xl font-semibold text-slate-200 flex items-center gap-2">
+                <i class="fas fa-wave-square"></i> 虚拟示波器 (电平波形)
+            </h2>
+            <div class="relative w-full h-[300px]">
+                <canvas id="scopeCanvas" class="w-full h-full"></canvas>
+                <div class="absolute left-2 top-2 text-xs text-slate-500 font-mono">Voltage (V)</div>
+                <div class="absolute right-2 bottom-2 text-xs text-slate-500 font-mono">Time (t) -></div>
+                <div class="absolute left-2 top-[15%] text-xs text-sky-500/50 font-mono">+5V (逻辑1)</div>
+                <div class="absolute left-2 top-[80%] text-xs text-slate-500/50 font-mono">0V (逻辑0)</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const hexInput = document.getElementById('hexInput');
+        const paritySelect = document.getElementById('paritySelect');
+        const noiseToggle = document.getElementById('noiseToggle');
+        const startBtn = document.getElementById('startBtn');
+        const frameContainer = document.getElementById('frameContainer');
+        const statusText = document.getElementById('statusText');
+        const canvas = document.getElementById('scopeCanvas');
+        const ctx = canvas.getContext('2d');
+
+        let animationId;
+        let currentFrameData = [];
+        let isAnimating = false;
+
+        // 调整 Canvas 分辨率以支持高清屏
+        function resizeCanvas() {
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * window.devicePixelRatio;
+            canvas.height = rect.height * window.devicePixelRatio;
+            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+            drawGrid();
+        }
+        window.addEventListener('resize', resizeCanvas);
+
+        // 限制输入为 Hex
+        hexInput.addEventListener('input', function() {
+            this.value = this.value.replace(/[^0-9A-Fa-f]/g, '').toUpperCase();
+        });
+
+        // 解析输入并生成数据帧
+        function generateFrameData() {
+            let hex = hexInput.value || '00';
+            let num = parseInt(hex, 16);
+            let bin = num.toString(2).padStart(8, '0');
+            let bits = bin.split('').reverse(); // LSB 低位在前
+
+            let frame = [];
+            // 起始位
+            frame.push({ label: '起始位', bit: 'Start', val: 0, color: 'bg-red-500/20 border-red-500/50 text-red-400' });
+            
+            // 数据位
+            let onesCount = 0;
+            bits.forEach((b, i) => {
+                if (b === '1') onesCount++;
+                frame.push({ label: `D${i}`, bit: b, val: parseInt(b), color: 'bg-slate-700/50 border-slate-500 text-slate-200' });
+            });
+
+            // 校验位
+            const parity = paritySelect.value;
+            if (parity !== 'none') {
+                let pBit = 0;
+                if (parity === 'odd') pBit = (onesCount % 2 === 0) ? 1 : 0;
+                if (parity === 'even') pBit = (onesCount % 2 === 0) ? 0 : 1;
+                frame.push({ label: '校验位', bit: pBit.toString(), val: pBit, color: 'bg-purple-500/20 border-purple-500/50 text-purple-400' });
+            }
+
+            // 停止位
+            frame.push({ label: '停止位', bit: 'Stop', val: 1, color: 'bg-green-500/20 border-green-500/50 text-green-400' });
+
+            return frame;
+        }
+
+        // 渲染 HTML 帧结构盒子
+        function renderFrameUI(frameData) {
+            frameContainer.innerHTML = '';
+            frameData.forEach((item, index) => {
+                const box = document.createElement('div');
+                box.className = `bit-box flex-1 min-w-[60px] flex flex-col items-center justify-center p-2 rounded border border-b-4 ${item.color}`;
+                box.id = `bit-${index}`;
+                box.innerHTML = `
+                    <span class="text-xs opacity-75">${item.label}</span>
+                    <span class="font-mono font-bold text-lg">${item.bit}</span>
+                `;
+                frameContainer.appendChild(box);
+            });
+        }
+
+        // 绘制示波器背景网格
+        function drawGrid() {
+            const width = canvas.width / window.devicePixelRatio;
+            const height = canvas.height / window.devicePixelRatio;
+            
+            ctx.clearRect(0, 0, width, height);
+            ctx.strokeStyle = 'rgba(51, 65, 85, 0.5)';
+            ctx.lineWidth = 1;
+
+            // 水平线
+            for (let y = 0; y <= height; y += height / 10) {
+                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke();
+            }
+            // 垂直线
+            for (let x = 0; x <= width; x += width / 20) {
+                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height); ctx.stroke();
+            }
+        }
+
+        // 波形动画主逻辑
+        function animateWaveform(frameData) {
+            if (animationId) cancelAnimationFrame(animationId);
+            
+            const width = canvas.width / window.devicePixelRatio;
+            const height = canvas.height / window.devicePixelRatio;
+            
+            const yHigh = height * 0.2; // 逻辑 1 (+5V)
+            const yLow = height * 0.8;  // 逻辑 0 (0V)
+            
+            // 计算每个比特占用的宽度 (前后留出空闲位 Idle)
+            const totalBits = frameData.length + 2; 
+            const bitWidth = width / totalBits;
+            
+            let startTime = null;
+            const duration = totalBits * 400; // 每比特 400ms
+
+            function draw(timestamp) {
+                if (!startTime) startTime = timestamp;
+                const progress = Math.min((timestamp - startTime) / duration, 1);
+                
+                drawGrid();
+                
+                // 绘制基础电平线
+                ctx.beginPath();
+                ctx.strokeStyle = '#38bdf8'; // Sky 400
+                ctx.lineWidth = 3;
+                ctx.shadowColor = '#0284c7';
+                ctx.shadowBlur = 10;
+
+                // 初始空闲状态 (高电平)
+                ctx.moveTo(0, yHigh);
+                let currentX = bitWidth;
+                ctx.lineTo(currentX, yHigh);
+
+                // 当前画到了第几个比特
+                const activeIndex = Math.floor((progress * totalBits) - 1);
+                
+                // 更新 UI 高亮
+                document.querySelectorAll('.bit-box').forEach((b, i) => {
+                    b.classList.toggle('active', i === activeIndex && activeIndex >= 0 && activeIndex < frameData.length);
+                });
+
+                if (activeIndex >= 0 && activeIndex < frameData.length) {
+                    statusText.innerHTML = `正在发送: <span class="text-white">${frameData[activeIndex].label}</span> (电平: ${frameData[activeIndex].val})`;
+                } else if (activeIndex >= frameData.length) {
+                    statusText.innerHTML = "传输完成 (Idle 状态)";
+                }
+
+                // 绘制已完成和正在进行的波形
+                let lastVal = 1; // 初始空闲为1
+                for (let i = 0; i < frameData.length; i++) {
+                    const val = frameData[i].val;
+                    const targetY = val === 1 ? yHigh : yLow;
+                    const startX = bitWidth + (i * bitWidth);
+                    const endX = startX + bitWidth;
+
+                    // 垂直跳变
+                    if (val !== lastVal) {
+                        ctx.lineTo(startX, targetY);
+                    }
+
+                    // 水平线段
+                    if (progress * width >= endX) {
+                        // 这一位已画完
+                        ctx.lineTo(endX, targetY);
+                    } else if (progress * width > startX) {
+                        // 正在画这一位 (加入干扰逻辑)
+                        let drawToX = progress * width;
+                        let drawY = targetY;
+                        
+                        if (noiseToggle.checked) {
+                            // 模拟共模干扰：在信号上叠加随机高频噪声
+                            drawY += (Math.random() - 0.5) * 40; 
+                        }
+                        
+                        ctx.lineTo(drawToX, drawY);
+                        break; // 停止绘制后续
+                    }
+                    lastVal = val;
+                }
+
+                ctx.stroke();
+                ctx.shadowBlur = 0; // 重置阴影
+
+                if (progress < 1) {
+                    animationId = requestAnimationFrame(draw);
+                } else {
+                    isAnimating = false;
+                    startBtn.innerHTML = '<i class="fas fa-play"></i> 重新传输';
+                    startBtn.disabled = false;
+                }
+            }
+
+            isAnimating = true;
+            animationId = requestAnimationFrame(draw);
+        }
+
+        startBtn.addEventListener('click', () => {
+            if (isAnimating) return;
+            startBtn.disabled = true;
+            startBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 传输中...';
+            
+            currentFrameData = generateFrameData();
+            renderFrameUI(currentFrameData);
+            animateWaveform(currentFrameData);
+        });
+
+        // 初始化
+        resizeCanvas();
+        currentFrameData = generateFrameData();
+        renderFrameUI(currentFrameData);
+        drawGrid();
+        
+        // 绘制初始静止波形 (空闲高电平)
+        ctx.beginPath();
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 3;
+        ctx.moveTo(0, canvas.height * 0.2 / window.devicePixelRatio);
+        ctx.lineTo(canvas.width / window.devicePixelRatio, canvas.height * 0.2 / window.devicePixelRatio);
+        ctx.stroke();
+
+    </script>
+</body>
+</html>

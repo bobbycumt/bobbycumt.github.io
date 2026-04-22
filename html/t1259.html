@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>最长上升子序列 DP + Pre数组回溯沙盘</title>
+    <style>
+        :root {
+            --bg-color: #f8f9fa;
+            --primary: #2c3e50;
+            --accent-i: #e74c3c;
+            --accent-j: #3498db;
+            --success: #2ecc71;
+            --path: #9b59b6; /* 最终路径的高亮颜色 */
+            --box-bg: #ffffff;
+            --text: #333;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h2 { color: var(--primary); margin-bottom: 5px; }
+        .subtitle { color: #7f8c8d; margin-bottom: 20px; font-size: 14px;}
+        
+        .control-panel {
+            background: white; padding: 15px 20px; border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px;
+            display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+        }
+        input[type="text"] { padding: 8px; font-size: 16px; border: 1px solid #ccc; border-radius: 5px; width: 250px; }
+        button {
+            padding: 8px 15px; font-size: 14px; cursor: pointer; border: none; border-radius: 5px;
+            background-color: #95a5a6; color: white; transition: background 0.3s;
+        }
+        button:hover { background-color: #7f8c8d; }
+        button.primary-btn { background-color: #3498db; }
+        button.primary-btn:hover { background-color: #2980b9; }
+
+        .visualization-area {
+            background: white; padding: 30px; border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05); width: 100%; max-width: 850px;
+            display: flex; flex-direction: column; gap: 25px;
+        }
+
+        .array-row { display: flex; align-items: center; gap: 10px; justify-content: center; position: relative; }
+        .row-label { width: 90px; font-weight: bold; color: #7f8c8d; text-align: right; margin-right: 10px; font-size: 14px;}
+
+        .box {
+            width: 50px; height: 50px; background: var(--box-bg);
+            border: 2px solid #bdc3c7; border-radius: 8px;
+            display: flex; justify-content: center; align-items: center;
+            font-size: 18px; font-weight: bold; position: relative;
+            transition: all 0.3s ease;
+        }
+        .box::after {
+            content: attr(data-index); position: absolute; bottom: -20px;
+            font-size: 12px; color: #aaa; font-weight: normal;
+        }
+
+        /* 状态高亮样式 */
+        .box.is-i { border-color: var(--accent-i); box-shadow: 0 0 10px rgba(231, 76, 60, 0.3); border-width: 3px; }
+        .box.is-j { border-color: var(--accent-j); box-shadow: 0 0 10px rgba(52, 152, 219, 0.3); border-width: 3px; }
+        .box.updated { background-color: #ffeaa7; color: #d35400; transform: scale(1.1); }
+        .box.final-max { background-color: var(--success); color: white; border-color: #27ae60; }
+        
+        /* 最终路径回溯样式 */
+        .box.in-path { background-color: var(--path); color: white; border-color: #8e44ad; transform: scale(1.1); box-shadow: 0 0 15px rgba(155, 89, 182, 0.5); }
+        .box.backtrack-focus { border-color: #f1c40f; border-width: 4px; border-style: dashed; }
+
+        .pointer-label { position: absolute; top: -25px; font-size: 14px; font-weight: bold; }
+        .label-i { color: var(--accent-i); }
+        .label-j { color: var(--accent-j); }
+
+        .narrative-box {
+            background: #f1f2f6; border-left: 5px solid var(--primary);
+            padding: 15px; border-radius: 0 5px 5px 0; font-size: 15px;
+            min-height: 70px; display: flex; align-items: center; line-height: 1.6;
+        }
+
+        .progress-bar { width: 100%; height: 5px; background: #ecf0f1; border-radius: 5px; overflow: hidden; margin-top: 10px; }
+        .progress-fill { height: 100%; background: var(--success); width: 0%; transition: width 0.3s linear; }
+    </style>
+</head>
+<body>
+
+    <h2>DP 状态转移沙盘 (LIS + Pre路径回溯)</h2>
+    <div class="subtitle">方程: dp[i] = max(dp[i], dp[j] + 1)  |  路径记录: pre[i] = j</div>
+
+    <div class="control-panel">
+        <label>数组:</label>
+        <input type="text" id="inputArr" value="10, 22, 9, 33, 21, 50">
+        <button class="primary-btn" onclick="initSimulation()">载入数据</button>
+        <button onclick="prevStep()" id="prevBtn" disabled>⏮ 上一步</button>
+        <button class="primary-btn" onclick="nextStep()" id="nextBtn">下一步 ⏭</button>
+        <button onclick="togglePlay()" id="playBtn">自动播放 ▶</button>
+    </div>
+
+    <div class="visualization-area">
+        <div class="array-row" id="arrContainer"></div>
+        <div class="array-row" id="dpContainer"></div>
+        <div class="array-row" id="preContainer"></div>
+
+        <div class="narrative-box" id="narrative">点击“载入数据”开始推演。</div>
+        <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+    </div>
+
+    <script>
+        let arr = [];
+        let frames = [];
+        let currentFrameIdx = -1;
+        let playInterval = null;
+
+        function initSimulation() {
+            const inputStr = document.getElementById('inputArr').value;
+            arr = inputStr.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+            if(arr.length === 0) return;
+            
+            pausePlay();
+            generateFrames();
+            currentFrameIdx = 0;
+            renderFrame(currentFrameIdx);
+            
+            document.getElementById('prevBtn').disabled = true;
+            document.getElementById('nextBtn').disabled = false;
+        }
+
+        function generateFrames() {
+            frames = [];
+            let dp = new Array(arr.length).fill(1);
+            let pre = new Array(arr.length).fill(-1); // 初始化 pre 数组为 -1
+            
+            frames.push({
+                dpState: [...dp], preState: [...pre], i: -1, j: -1,
+                msg: "【初始化】dp 设为 1。pre 数组设为 -1 (表示目前没有前驱节点)。"
+            });
+
+            // 1. 正向 DP 计算阶段
+            for (let i = 1; i < arr.length; i++) {
+                frames.push({
+                    dpState: [...dp], preState: [...pre], i: i, j: -1,
+                    msg: `【新循环】寻找 a[${i}]=${arr[i]} 的最佳前驱。`
+                });
+
+                for (let j = 0; j < i; j++) {
+                    let msg = `比较 a[j]=${arr[j]} 和 a[i]=${arr[i]}。<br>`;
+                    let updated = false;
+
+                    if (arr[j] < arr[i]) {
+                        if (dp[j] + 1 > dp[i]) {
+                            dp[i] = dp[j] + 1;
+                            pre[i] = j; // 记录前驱！
+                            msg += `✅ <b>可以接上且收益更大！</b> 更新 dp[${i}]=${dp[i]}。<br>✨ <b>关键：记录 pre[${i}] = ${j}</b>，表示 ${arr[i]} 前面是 ${arr[j]}。`;
+                            updated = true;
+                        } else {
+                            msg += `❌ 能接上，但长度并没增加，跳过。`;
+                        }
+                    } else {
+                        msg += `❌ 无法形成严格上升，跳过。`;
+                    }
+
+                    frames.push({
+                        dpState: [...dp], preState: [...pre], i: i, j: j,
+                        msg: msg, updatedIndex: updated ? i : -1
+                    });
+                }
+            }
+
+            // 2. 准备回溯阶段
+            let maxDp = Math.max(...dp);
+            let maxIdx = dp.indexOf(maxDp);
+            frames.push({
+                dpState: [...dp], preState: [...pre], i: -1, j: -1, finalMaxIdx: maxIdx, phase: 'find-max',
+                msg: `【计算完成】全局最大长度为 <b>${maxDp}</b>，在索引 <b>${maxIdx}</b>。接下来进入<b>路径回溯</b>阶段！`
+            });
+
+            // 3. 顺着 pre 数组倒推路径
+            let curr = maxIdx;
+            let pathIndices = [];
+            while (curr !== -1) {
+                pathIndices.push(curr);
+                let nextCurr = pre[curr];
+                
+                let backtrackMsg = `【回溯中】当前节点 a[${curr}] = ${arr[curr]}。<br>`;
+                if (nextCurr !== -1) {
+                    backtrackMsg += `根据 pre[${curr}] 的指引，它的上一个节点在索引 <b>${nextCurr}</b>。`;
+                } else {
+                    backtrackMsg += `pre[${curr}] 是 -1，说明这是起点！回溯结束。`;
+                }
+
+                frames.push({
+                    dpState: [...dp], preState: [...pre], 
+                    backtrackCurr: curr, backtrackNext: nextCurr,
+                    pathSoFar: [...pathIndices], phase: 'backtrack',
+                    msg: backtrackMsg
+                });
+                curr = nextCurr;
+            }
+        }
+
+        function renderFrame(idx) {
+            const frame = frames[idx];
+            const arrDiv = document.getElementById('arrContainer');
+            const dpDiv = document.getElementById('dpContainer');
+            const preDiv = document.getElementById('preContainer');
+            
+            arrDiv.innerHTML = '<div class="row-label">原序列 a:</div>';
+            dpDiv.innerHTML = '<div class="row-label">DP 数组:</div>';
+            preDiv.innerHTML = '<div class="row-label">Pre 数组:</div>';
+
+            arr.forEach((val, index) => {
+                // 原数组渲染
+                let aBox = document.createElement('div');
+                aBox.className = 'box'; aBox.innerText = val; aBox.setAttribute('data-index', index);
+                
+                // DP数组渲染
+                let dBox = document.createElement('div');
+                dBox.className = 'box'; dBox.innerText = frame.dpState[index]; dBox.setAttribute('data-index', index);
+                
+                // Pre数组渲染
+                let pBox = document.createElement('div');
+                pBox.className = 'box'; pBox.innerText = frame.preState[index]; pBox.setAttribute('data-index', index);
+
+                // 正向计算阶段的高亮
+                if (frame.phase !== 'backtrack' && frame.phase !== 'find-max') {
+                    if (index === frame.i) { aBox.classList.add('is-i'); dBox.classList.add('is-i'); pBox.classList.add('is-i'); aBox.innerHTML += '<div class="pointer-label label-i">i</div>'; }
+                    if (index === frame.j) { aBox.classList.add('is-j'); dBox.classList.add('is-j'); pBox.classList.add('is-j'); aBox.innerHTML += '<div class="pointer-label label-j">j</div>'; }
+                    if (index === frame.updatedIndex) { dBox.classList.add('updated'); pBox.classList.add('updated'); }
+                }
+
+                // 回溯阶段的高亮
+                if (frame.phase === 'find-max' && index === frame.finalMaxIdx) {
+                    dBox.classList.add('final-max');
+                }
+                
+                if (frame.phase === 'backtrack') {
+                    if (frame.pathSoFar && frame.pathSoFar.includes(index)) {
+                        aBox.classList.add('in-path'); // 染成紫色，表示这是最终的队伍成员
+                    }
+                    if (index === frame.backtrackCurr) {
+                        pBox.classList.add('backtrack-focus'); // 框出当前的 pre 值
+                    }
+                    if (index === frame.backtrackNext) {
+                        aBox.classList.add('backtrack-focus'); // 框出下一个要去的地方
+                    }
+                }
+
+                arrDiv.appendChild(aBox);
+                dpDiv.appendChild(dBox);
+                preDiv.appendChild(pBox);
+            });
+
+            document.getElementById('narrative').innerHTML = frame.msg;
+            document.getElementById('progressFill').style.width = ((idx + 1) / frames.length * 100) + '%';
+
+            document.getElementById('prevBtn').disabled = (idx === 0);
+            document.getElementById('nextBtn').disabled = (idx === frames.length - 1);
+            if(idx === frames.length - 1) pausePlay();
+        }
+
+        function nextStep() { if (currentFrameIdx < frames.length - 1) { currentFrameIdx++; renderFrame(currentFrameIdx); } }
+        function prevStep() { if (currentFrameIdx > 0) { currentFrameIdx--; renderFrame(currentFrameIdx); } }
+        function togglePlay() {
+            if (playInterval) { pausePlay(); } 
+            else {
+                if (currentFrameIdx === frames.length - 1) currentFrameIdx = -1;
+                playInterval = setInterval(nextStep, 1000); // 1秒/帧
+                document.getElementById('playBtn').innerText = '暂停 ⏸';
+                document.getElementById('playBtn').classList.add('primary-btn');
+            }
+        }
+        function pausePlay() {
+            clearInterval(playInterval); playInterval = null;
+            document.getElementById('playBtn').innerText = '自动播放 ▶';
+            document.getElementById('playBtn').classList.remove('primary-btn');
+        }
+
+        window.onload = initSimulation;
+    </script>
+</body>
+</html>

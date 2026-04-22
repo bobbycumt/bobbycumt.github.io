@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>算法竞赛：累加和单步演示</title>
+  <style>
+    :root {
+      --w: 1000px;
+      --line: #334155;
+      --text: #e5e7eb;
+      --muted: #94a3b8;
+      --active: #22d3ee;
+      --done: #34d399;
+      --arr: #60a5fa;
+      --sum: #f59e0b;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: linear-gradient(180deg, #020617, #0f172a);
+      color: var(--text);
+      font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+      display: flex;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    .app {
+      width: var(--w);
+      max-width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(17, 24, 39, 0.92);
+      padding: 20px;
+      box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+    }
+
+    h1 { margin: 0 0 8px; }
+
+    .sub {
+      color: var(--muted);
+      margin-bottom: 16px;
+      line-height: 1.7;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr auto auto auto auto;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: #0b1221;
+      color: var(--text);
+      padding: 10px 12px;
+      font-size: 15px;
+    }
+
+    button {
+      border: 1px solid #475569;
+      background: #1e293b;
+      color: var(--text);
+      border-radius: 10px;
+      padding: 10px 12px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .board {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px;
+      background: #0b1221;
+      margin-bottom: 12px;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 90px repeat(12, minmax(48px, 1fr));
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .label {
+      text-align: right;
+      font-weight: 600;
+      color: #cbd5e1;
+      padding-right: 8px;
+    }
+
+    .cell {
+      min-height: 48px;
+      border-radius: 10px;
+      border: 1px solid #334155;
+      background: #111827;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      font-weight: 600;
+      transition: all 0.2s ease;
+    }
+
+    .cell::after {
+      content: attr(data-idx);
+      position: absolute;
+      top: 4px;
+      left: 6px;
+      font-size: 10px;
+      color: #64748b;
+      font-weight: 500;
+    }
+
+    .arr { border-color: #1d4ed8; color: var(--arr); }
+
+    .active {
+      outline: 2px solid var(--active);
+      transform: translateY(-2px);
+      box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.2);
+    }
+
+    .done {
+      border-color: #065f46;
+      background: rgba(6, 95, 70, 0.2);
+      color: var(--done);
+    }
+
+    .formula,
+    .result,
+    .log {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #020617;
+      padding: 12px;
+      margin-bottom: 10px;
+      line-height: 1.7;
+    }
+
+    .formula { min-height: 86px; }
+
+    .result {
+      font-size: 18px;
+      color: #fde68a;
+      font-weight: 700;
+    }
+
+    .log {
+      max-height: 280px;
+      overflow: auto;
+      font-size: 14px;
+      color: #d1d5db;
+    }
+
+    .tag {
+      color: var(--sum);
+      font-weight: 700;
+      margin-right: 8px;
+    }
+
+    .num { color: #67e8f9; font-weight: 700; }
+    .ok { color: #34d399; }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <h1>一组数据累加和（sum += a[i]）交互演示</h1>
+    <div class="sub">
+      目标：展示累加过程。<br/>
+      核心循环：<code>sum += a[i]</code>。
+    </div>
+
+    <section class="controls">
+      <input id="arrInput" type="text" value="3 1 4 1 5 9" aria-label="数组输入" />
+      <button id="initBtn">初始化</button>
+      <button id="stepBtn">单步执行</button>
+      <button id="autoBtn">自动播放</button>
+      <button id="resetBtn">重置</button>
+    </section>
+
+    <section class="board" id="board"></section>
+    <section class="formula" id="formula">等待初始化...</section>
+    <section class="result" id="result">当前 sum = 0</section>
+    <section class="log" id="log"></section>
+  </main>
+
+  <script>
+    const arrInput = document.getElementById('arrInput');
+    const initBtn = document.getElementById('initBtn');
+    const stepBtn = document.getElementById('stepBtn');
+    const autoBtn = document.getElementById('autoBtn');
+    const resetBtn = document.getElementById('resetBtn');
+
+    const board = document.getElementById('board');
+    const formula = document.getElementById('formula');
+    const result = document.getElementById('result');
+    const logEl = document.getElementById('log');
+
+    let state = {
+      a: [],
+      i: 0,
+      sum: 0,
+      timer: null,
+      done: false,
+    };
+
+    function parseInput() {
+      const nums = arrInput.value.trim().split(/[,\s]+/).filter(Boolean).map(Number);
+      if (!nums.length || nums.some(n => Number.isNaN(n))) return null;
+      return nums.slice(0, 12);
+    }
+
+    function makeRow(label, arr, activeIndex = -1, doneUntil = -1) {
+      const row = document.createElement('div');
+      row.className = 'row';
+
+      const l = document.createElement('div');
+      l.className = 'label';
+      l.textContent = label;
+      row.appendChild(l);
+
+      for (let i = 0; i < 12; i++) {
+        const cell = document.createElement('div');
+        cell.className = 'cell arr';
+        cell.dataset.idx = i < arr.length ? `i=${i}` : '';
+        cell.textContent = i < arr.length ? arr[i] : '·';
+        if (i === activeIndex) cell.classList.add('active');
+        if (i <= doneUntil) cell.classList.add('done');
+        row.appendChild(cell);
+      }
+
+      return row;
+    }
+
+    function render() {
+      board.innerHTML = '';
+      board.appendChild(makeRow('数组 a', state.a, state.i, state.i - 1));
+      result.textContent = `当前 sum = ${state.sum}`;
+    }
+
+    function appendLog(text) {
+      const line = document.createElement('div');
+      line.innerHTML = `<span class="tag">STEP</span>${text}`;
+      logEl.appendChild(line);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function updateFormula() {
+      if (!state.a.length) {
+        formula.textContent = '等待初始化...';
+        return;
+      }
+
+      if (state.done) {
+        formula.innerHTML = `<span class="ok">执行完成：</span>所有元素已累加，最终 sum = <span class="num">${state.sum}</span>`;
+        return;
+      }
+
+      const cur = state.a[state.i];
+      formula.innerHTML = [
+        `当前 i = <span class="num">${state.i}</span>`,
+        `执行：sum += a[i] → sum += ${cur}`,
+        `等价：sum = ${state.sum} + ${cur}`
+      ].join('<br/>');
+    }
+
+    function step() {
+      if (!state.a.length) return;
+
+      if (state.i >= state.a.length) {
+        state.done = true;
+        appendLog(`累加结束，最终 sum = ${state.sum}`);
+        stopAuto();
+        updateFormula();
+        return;
+      }
+
+      const before = state.sum;
+      const add = state.a[state.i];
+      state.sum += add;
+      appendLog(`i=${state.i}: sum += a[${state.i}] => ${before} + ${add} = ${state.sum}`);
+      state.i++;
+
+      if (state.i >= state.a.length) {
+        state.done = true;
+        appendLog(`累加结束，最终 sum = ${state.sum}`);
+        stopAuto();
+      }
+
+      render();
+      updateFormula();
+    }
+
+    function init() {
+      const a = parseInput();
+      if (!a) {
+        alert('请输入有效数字，例如：3 1 4 1 5 9');
+        return;
+      }
+
+      stopAuto();
+      state = {
+        a,
+        i: 0,
+        sum: 0,
+        timer: null,
+        done: false,
+        };
+
+      logEl.innerHTML = '';
+      appendLog(`初始化成功，数组长度 n=${a.length}`);
+      render();
+      updateFormula();
+    }
+
+    function reset() {
+      stopAuto();
+      state = {
+        a: [],
+        i: 0,
+        sum: 0,
+        timer: null,
+        done: false,
+        };
+      board.innerHTML = '';
+      logEl.innerHTML = '';
+      formula.textContent = '等待初始化...';
+      result.textContent = '当前 sum = 0';
+    }
+
+    function autoPlay() {
+      if (!state.a.length) return;
+      if (state.timer) {
+        stopAuto();
+        return;
+      }
+
+      autoBtn.textContent = '暂停播放';
+      state.timer = setInterval(() => {
+        if (state.done) {
+          stopAuto();
+          return;
+        }
+        step();
+      }, 800);
+    }
+
+    function stopAuto() {
+      if (state.timer) {
+        clearInterval(state.timer);
+        state.timer = null;
+      }
+      autoBtn.textContent = '自动播放';
+    }
+
+    initBtn.addEventListener('click', init);
+    stepBtn.addEventListener('click', step);
+    autoBtn.addEventListener('click', autoPlay);
+    resetBtn.addEventListener('click', reset);
+    reset();
+  </script>
+</body>
+</html>

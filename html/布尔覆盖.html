@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>布尔网格覆盖模拟 (坐标映射法)</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f7f6;
+            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .container {
+            background: white;
+            max-width: 790px;
+            width: 100%;
+            padding: 20px 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+        }
+
+        h2 { margin-top: 0; color: #2c3e50; text-align: center; border-bottom: 2px solid #eee; padding-bottom: 10px; font-size: 22px; }
+
+        /* 顶部面板 */
+        .top-panel {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        /* 控制区 */
+        .controls {
+            flex: 1;
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+        }
+        .control-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            gap: 10px;
+        }
+        .coord-input {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .coord-input input {
+            width: 50px;
+            padding: 5px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            text-align: center;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        .btn-action { padding: 8px 15px; border: none; border-radius: 4px; font-size: 14px; cursor: pointer; font-weight: bold; transition: all 0.2s; background-color: #e74c3c; color: white; width: 100%;}
+        .btn-action:hover { background-color: #c0392b; }
+        .btn-reset { padding: 6px 15px; border: none; border-radius: 4px; font-size: 13px; cursor: pointer; background-color: #95a5a6; color: white; width: 100%; margin-top: 5px;}
+
+        /* 状态统计区 */
+        .stats {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: #e8f4fd;
+            border-left: 4px solid #3498db;
+            padding: 15px 25px;
+            border-radius: 6px;
+            min-width: 150px;
+        }
+        .stats-title { font-size: 13px; color: #7f8c8d; font-weight: bold; margin-bottom: 5px; }
+        .stats-val { font-size: 32px; font-weight: bold; color: #2980b9; font-family: monospace;}
+
+        /* 网格展示区 */
+        .grid-wrapper {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
+            position: relative;
+        }
+        
+        .axis-label { position: absolute; font-size: 12px; font-weight: bold; color: #95a5a6;}
+        .axis-x { top: -20px; left: 50%; transform: translateX(-50%); }
+        .axis-y { left: -25px; top: 50%; transform: translateY(-50%) rotate(-90deg); }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(10, 35px);
+            grid-template-rows: repeat(10, 35px);
+            gap: 2px;
+            background: #cfd8dc;
+            padding: 4px;
+            border-radius: 6px;
+        }
+
+        .cell {
+            background-color: #2ecc71; /* 初始为 true (绿色实体) */
+            border-radius: 3px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 10px;
+            color: rgba(255,255,255,0.6);
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            position: relative;
+            cursor: crosshair;
+        }
+        .cell:hover::after {
+            content: attr(data-coord);
+            position: absolute;
+            top: -25px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 2px 5px;
+            border-radius: 3px;
+            white-space: nowrap;
+            z-index: 100;
+        }
+
+        /* 状态类 */
+        .cell.false {
+            background-color: #ecf0f1; /* 变为 false (灰色空洞) */
+            color: #bdc3c7;
+            transform: scale(0.9);
+            box-shadow: inset 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .cell.highlight-op {
+            animation: flash 0.5s ease-out;
+        }
+
+        @keyframes flash {
+            0% { background-color: #f1c40f; transform: scale(1.1); box-shadow: 0 0 10px #f1c40f;}
+            100% { }
+        }
+
+        /* 日志输出区 */
+        .log-box {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 12px 15px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 14px;
+            height: 100px;
+            overflow-y: auto;
+            border: 1px solid #1a252f;
+            line-height: 1.5;
+        }
+        .log-entry { border-bottom: 1px dashed #34495e; padding-bottom: 4px; margin-bottom: 4px;}
+        .kw { color: #c678dd; }
+        .var { color: #61afef; }
+        .num { color: #d19a66; }
+        .bool { color: #e06c75; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>二维网格布尔覆盖 (空间换时间)</h2>
+    
+    <div class="top-panel">
+        <div class="controls">
+            <div style="font-size:13px; color:#7f8c8d; margin-bottom:8px; font-weight:bold;">定义切割矩形范围 (1~10)：</div>
+            <div class="control-row">
+                <span style="font-weight:bold; font-size:14px;">起点:</span>
+                <div class="coord-input">
+                    X1 <input type="number" id="x1" value="2" min="1" max="10">
+                </div>
+                <div class="coord-input">
+                    Y1 <input type="number" id="y1" value="2" min="1" max="10">
+                </div>
+            </div>
+            <div class="control-row">
+                <span style="font-weight:bold; font-size:14px;">终点:</span>
+                <div class="coord-input">
+                    X2 <input type="number" id="x2" value="5" min="1" max="10">
+                </div>
+                <div class="coord-input">
+                    Y2 <input type="number" id="y2" value="4" min="1" max="10">
+                </div>
+            </div>
+            <button class="btn-action" onclick="applyCut()">执行覆盖 ( space[x][y] = false )</button>
+            <button class="btn-reset" onclick="initGrid()">重置空间 ( memset true )</button>
+        </div>
+
+        <div class="stats">
+            <div class="stats-title">剩余完整方块数</div>
+            <div class="stats-val" id="remainDisplay">100</div>
+        </div>
+    </div>
+
+    <div class="grid-wrapper">
+        <div class="axis-label axis-x">X 轴 (列 1~10)</div>
+        <div class="axis-label axis-y">Y 轴 (行 1~10)</div>
+        <div class="grid" id="gridContainer">
+            </div>
+    </div>
+
+    <div class="log-box" id="logBox">
+        <div style="color:#bdc3c7;">初始化：10x10 的布尔数组已全部设为 true。</div>
+    </div>
+</div>
+
+<script>
+    const GRID_SIZE = 10;
+    // 虚拟的布尔二维数组
+    let space = [];
+
+    const gridContainer = document.getElementById('gridContainer');
+    const remainDisplay = document.getElementById('remainDisplay');
+    const logBox = document.getElementById('logBox');
+
+    function log(html) {
+        const entry = document.createElement('div');
+        entry.className = 'log-entry';
+        entry.innerHTML = html;
+        logBox.appendChild(entry);
+        logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    // 步骤 1：初始化空间
+    function initGrid() {
+        space = [];
+        gridContainer.innerHTML = '';
+        
+        for (let y = 1; y <= GRID_SIZE; y++) {
+            let row = [];
+            for (let x = 1; x <= GRID_SIZE; x++) {
+                row.push(true); // 初始全部为 true
+                
+                const cell = document.createElement('div');
+                cell.className = 'cell';
+                cell.id = `cell-${x}-${y}`;
+                cell.setAttribute('data-coord', `(${x}, ${y})`);
+                gridContainer.appendChild(cell);
+            }
+            space.push(row);
+        }
+        
+        updateRemainCount();
+        logBox.innerHTML = '<div style="color:#bdc3c7;">memset(space, true); // 空间已重置</div>';
+    }
+
+    // 统计剩余数量
+    function updateRemainCount() {
+        let count = 0;
+        for (let y = 1; y <= GRID_SIZE; y++) {
+            for (let x = 1; x <= GRID_SIZE; x++) {
+                if (space[y-1][x-1]) count++;
+            }
+        }
+        remainDisplay.innerText = count;
+        return count;
+    }
+
+    // 步骤 2：执行覆盖/切割
+    function applyCut() {
+        let x1 = parseInt(document.getElementById('x1').value) || 1;
+        let y1 = parseInt(document.getElementById('y1').value) || 1;
+        let x2 = parseInt(document.getElementById('x2').value) || 1;
+        let y2 = parseInt(document.getElementById('y2').value) || 1;
+
+        // 【教学重点：防坑指南】坐标规范化，防止 x1 > x2 导致循环失效
+        let startX = Math.min(x1, x2);
+        let endX = Math.max(x1, x2);
+        let startY = Math.min(y1, y2);
+        let endY = Math.max(y1, y2);
+
+        // 边界限制
+        startX = Math.max(1, startX); endX = Math.min(GRID_SIZE, endX);
+        startY = Math.max(1, startY); endY = Math.min(GRID_SIZE, endY);
+
+        let overlapCount = 0;
+
+        // 无脑嵌套循环，执行覆盖
+        for (let y = startY; y <= endY; y++) {
+            for (let x = startX; x <= endX; x++) {
+                // 如果已经是 false，说明之前切过，这里统计一下用于教学展示
+                if (space[y-1][x-1] === false) {
+                    overlapCount++;
+                }
+
+                // 核心逻辑：覆盖赋值
+                space[y-1][x-1] = false;
+
+                // UI 表现
+                const cell = document.getElementById(`cell-${x}-${y}`);
+                cell.classList.remove('highlight-op');
+                void cell.offsetWidth; // 触发重绘以重新播放动画
+                cell.classList.add('highlight-op');
+                cell.classList.add('false');
+            }
+        }
+
+        let remain = updateRemainCount();
+
+        // 打印代码执行日志
+        let codeHtml = `<span class="kw">for</span>(i=${startX}; i<=${endX}; i++) ` +
+                       `<span class="kw">for</span>(j=${startY}; j<=${endY}; j++) ` +
+                       `<span class="var">space</span>[i][j] = <span class="bool">false</span>;`;
+        
+        let overlapMsg = overlapCount > 0 ? `<span style="color:#f1c40f;"> (其中 ${overlapCount} 个格子属于重叠覆盖，天然去重)</span>` : "";
+
+        log(`▶ 执行切割区域 (${startX},${startY}) 到 (${endX},${endY})：<br>${codeHtml}${overlapMsg}`);
+    }
+
+    // 页面加载完成初始化
+    window.onload = initGrid;
+
+</script>
+</body>
+</html>

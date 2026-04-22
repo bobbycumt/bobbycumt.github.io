@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>最大子矩阵 (降维打击 + Kadane)</title>
+    <style>
+        :root {
+            --bg-color: #f4f7f6; --primary: #2c3e50; 
+            --success: #2ecc71; --warning: #f39c12; --danger: #e74c3c;
+            --highlight: #3498db; --text: #333;
+            --cell-bg: #fff; --path-bg: #f5eef8; --path-border: #8e44ad;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, sans-serif; background: var(--bg-color); color: var(--text);
+            margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center;
+        }
+        h2 { color: var(--primary); margin-bottom: 5px; }
+        .subtitle { color: #7f8c8d; margin-bottom: 20px; font-size: 15px;}
+        
+        .control-panel {
+            background: white; padding: 15px 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            margin-bottom: 15px; display: flex; gap: 10px; align-items: center; justify-content: center;
+        }
+        button {
+            padding: 8px 15px; font-size: 14px; cursor: pointer; border: none; border-radius: 5px;
+            background: #95a5a6; color: white; transition: 0.3s; font-weight: bold;
+        }
+        button:hover { background: #7f8c8d; }
+        button.primary-btn { background: #3498db; }
+        button.primary-btn:hover { background: #2980b9; }
+
+        .visualization-area {
+            background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            width: 100%; max-width: 800px; display: flex; flex-direction: column; gap: 20px; align-items: center;
+        }
+
+        .dashboard { display: flex; gap: 30px; margin-bottom: 5px; }
+        .dash-card {
+            background: #f8f9fa; border: 2px solid #ecf0f1; border-radius: 8px; padding: 10px 20px;
+            text-align: center; min-width: 150px; transition: all 0.3s ease;
+        }
+        .dash-title { font-size: 13px; color: #7f8c8d; font-weight: bold; margin-bottom: 5px; text-transform: uppercase;}
+        .dash-value { font-size: 24px; font-weight: bold; color: var(--primary); }
+        .dash-card.flash-max { border-color: var(--warning); background: #fcf3cf; transform: scale(1.1); box-shadow: 0 0 15px rgba(243, 156, 18, 0.4);}
+
+        /* 矩阵容器 */
+        .grids-container { display: flex; flex-direction: column; align-items: center; gap: 25px; width: 100%;}
+        
+        .matrix-wrapper { display: flex; flex-direction: column; align-items: center; gap: 10px;}
+        .matrix-title { font-weight: bold; color: var(--primary); font-size: 15px;}
+        
+        .grid { display: grid; gap: 4px; }
+        .grid-2d { grid-template-columns: repeat(4, 50px); grid-template-rows: repeat(4, 50px);}
+        .grid-1d { grid-template-columns: repeat(4, 50px); grid-template-rows: 50px;}
+
+        .cell {
+            display: flex; justify-content: center; align-items: center;
+            background: var(--cell-bg); border: 2px solid #bdc3c7; border-radius: 6px;
+            font-size: 18px; font-weight: bold; color: #555; transition: all 0.3s ease;
+        }
+
+        /* 动画与高亮状态 */
+        .cell.in-row { background: #ebf5fb; border-color: #85c1e9; } /* 当前被选中的行范围 */
+        .cell.in-col { border-color: var(--warning); border-width: 3px; transform: scale(1.05); z-index: 5; background: #fcf3cf; color: #d35400;} /* 当前最大子段的列范围 */
+        .cell.final-best { background: var(--path-bg); border-color: var(--path-border); color: var(--path-border); transform: scale(1.1); box-shadow: 0 0 15px rgba(142, 68, 173, 0.4); z-index: 10;}
+        
+        /* 压缩特效线 */
+        .compress-icon { font-size: 20px; color: #bdc3c7; font-weight: bold; margin: -10px 0;}
+
+        .narrative-box {
+            background: #f1f2f6; border-left: 5px solid var(--primary); padding: 15px; border-radius: 0 5px 5px 0;
+            font-size: 15px; width: 100%; box-sizing: border-box; min-height: 80px; display: flex; align-items: center; line-height: 1.6;
+        }
+
+        .progress-bar { width: 100%; height: 5px; background: #ecf0f1; border-radius: 5px; overflow: hidden; margin-top: 5px;}
+        .progress-fill { height: 100%; background: var(--highlight); width: 0%; transition: width 0.3s linear; }
+    </style>
+</head>
+<body>
+
+    <h2>最大子矩阵 (降维压缩法)</h2>
+    <div class="subtitle">核心哲学：固定上下边界，将多行压成一维，套用 O(N) Kadane 算法求最大子段！</div>
+
+    <div class="control-panel">
+        <button onclick="prevStep()" id="prevBtn" disabled>⏮ 上一步</button>
+        <button class="primary-btn" onclick="nextStep()" id="nextBtn">下一步 ⏭</button>
+        <button onclick="togglePlay()" id="playBtn">自动播放 ▶</button>
+        <button onclick="resetSimulation()">重置 ↺</button>
+    </div>
+
+    <div class="visualization-area">
+        
+        <div class="dashboard">
+            <div class="dash-card" id="dashLocal">
+                <div class="dash-title">当前边界局部最大和</div>
+                <div class="dash-value" id="valLocal">-</div>
+            </div>
+            <div class="dash-card" id="dashMax">
+                <div class="dash-title">全局最高纪录</div>
+                <div class="dash-value" id="valMax">-</div>
+            </div>
+        </div>
+
+        <div class="grids-container">
+            <div class="matrix-wrapper">
+                <div class="matrix-title">二维原矩阵</div>
+                <div class="grid grid-2d" id="grid2d"></div>
+            </div>
+            
+            <div class="compress-icon">⬇ 纵向相加压缩 ⬇</div>
+
+            <div class="matrix-wrapper">
+                <div class="matrix-title">压缩后的一维数组</div>
+                <div class="grid grid-1d" id="grid1d"></div>
+            </div>
+        </div>
+
+        <div class="narrative-box" id="narrative">点击“自动播放”开始暴力枚举所有边界组合。</div>
+        <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+    </div>
+
+    <script>
+        // 原始矩阵 4x4
+        const matrix = [
+            [ 0, -2, -7,  0],
+            [ 9,  2, -6,  2],
+            [-4,  1, -4,  1],
+            [-1,  8,  0, -2]
+        ];
+        const N = 4;
+
+        let frames = [];
+        let currentFrameIdx = 0;
+        let playInterval = null;
+
+        function initGrids() {
+            const grid2d = document.getElementById('grid2d');
+            const grid1d = document.getElementById('grid1d');
+            grid2d.innerHTML = ''; grid1d.innerHTML = '';
+
+            for (let r = 0; r < N; r++) {
+                for (let c = 0; c < N; c++) {
+                    let cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.id = `c2d-${r}-${c}`;
+                    cell.innerText = matrix[r][c];
+                    grid2d.appendChild(cell);
+                }
+            }
+
+            for (let c = 0; c < N; c++) {
+                let cell = document.createElement('div');
+                cell.className = 'cell';
+                cell.id = `c1d-${c}`;
+                cell.innerText = '0';
+                grid1d.appendChild(cell);
+            }
+        }
+
+        // Kadane 算法求解一维最大子段和
+        function runKadane(arr) {
+            let curSum = arr[0], maxSum = arr[0];
+            let curStart = 0, bestStart = 0, bestEnd = 0;
+            
+            for (let i = 1; i < arr.length; i++) {
+                if (curSum > 0) {
+                    curSum += arr[i];
+                } else {
+                    curSum = arr[i];
+                    curStart = i;
+                }
+                if (curSum > maxSum) {
+                    maxSum = curSum;
+                    bestStart = curStart;
+                    bestEnd = i;
+                }
+            }
+            return { maxSum, bestStart, bestEnd };
+        }
+
+        function generateFrames() {
+            frames = [];
+            let globalMax = -Infinity;
+            let bestR1 = 0, bestR2 = 0, bestC1 = 0, bestC2 = 0;
+
+            frames.push({
+                r1: -1, r2: -1, arr1d: [0,0,0,0], globalMax: '-', localMax: '-', phase: 'init',
+                msg: "【初始化】准备枚举原矩阵所有的“上边界”和“下边界”组合。"
+            });
+
+            for (let i = 0; i < N; i++) {
+                let colSum = [0, 0, 0, 0];
+                
+                for (let j = i; j < N; j++) {
+                    // 纵向压缩累加
+                    for (let c = 0; c < N; c++) {
+                        colSum[c] += matrix[j][c];
+                    }
+
+                    frames.push({
+                        r1: i, r2: j, arr1d: [...colSum], 
+                        globalMax: globalMax === -Infinity ? '-' : globalMax, localMax: '-', 
+                        phase: 'compress',
+                        msg: `【选定边界】上边界为第 <b>${i}</b> 行，下边界为第 <b>${j}</b> 行。<br>把这几行垂直捏在一起相加，得到了下面的一维数组！`
+                    });
+
+                    // 对一维数组跑 Kadane
+                    let kadaneResult = runKadane(colSum);
+                    let isNewMax = false;
+
+                    if (kadaneResult.maxSum > globalMax) {
+                        globalMax = kadaneResult.maxSum;
+                        bestR1 = i; bestR2 = j;
+                        bestC1 = kadaneResult.bestStart; bestC2 = kadaneResult.bestEnd;
+                        isNewMax = true;
+                    }
+
+                    frames.push({
+                        r1: i, r2: j, arr1d: [...colSum], 
+                        c1: kadaneResult.bestStart, c2: kadaneResult.bestEnd,
+                        globalMax: globalMax, localMax: kadaneResult.maxSum, 
+                        isNewMax: isNewMax, phase: 'kadane',
+                        msg: `【一维 Kadane】在压缩后的数组上找最大子段和。<br>找到局部最大和为 <b>${kadaneResult.maxSum}</b> (橙色列)。` + 
+                             (isNewMax ? " 🎉 <b>打破全局记录！</b>" : " ❌ 未超越全局最高纪录。")
+                    });
+                }
+            }
+
+            // 最终大赢家
+            frames.push({
+                r1: bestR1, r2: bestR2, c1: bestC1, c2: bestC2, 
+                arr1d: [0,0,0,0], globalMax: globalMax, localMax: '-', 
+                phase: 'done',
+                msg: `🏆 <b>推演完毕！</b> 暴力查遍了所有边界组合。<br>最终全局最大子矩阵和为 <b>${globalMax}</b>，位于紫色高亮区域！`
+            });
+        }
+
+        function renderFrame(idx) {
+            const frame = frames[idx];
+            
+            // 清理状态
+            document.querySelectorAll('.cell').forEach(c => {
+                c.classList.remove('in-row', 'in-col', 'final-best');
+            });
+            document.getElementById('dashMax').classList.remove('flash-max');
+
+            // 渲染一维数组数字
+            for(let c = 0; c < N; c++) {
+                let cell1d = document.getElementById(`c1d-${c}`);
+                cell1d.innerText = (frame.phase === 'init' || frame.phase === 'done') ? '-' : frame.arr1d[c];
+            }
+
+            // 应用高亮特效
+            if (frame.phase === 'compress' || frame.phase === 'kadane') {
+                for (let r = frame.r1; r <= frame.r2; r++) {
+                    for (let c = 0; c < N; c++) {
+                        document.getElementById(`c2d-${r}-${c}`).classList.add('in-row');
+                    }
+                }
+                
+                if (frame.phase === 'kadane') {
+                    for (let c = frame.c1; c <= frame.c2; c++) {
+                        document.getElementById(`c1d-${c}`).classList.add('in-col');
+                        for (let r = frame.r1; r <= frame.r2; r++) {
+                            document.getElementById(`c2d-${r}-${c}`).classList.add('in-col');
+                        }
+                    }
+                    if (frame.isNewMax) {
+                        document.getElementById('dashMax').classList.add('flash-max');
+                    }
+                }
+            }
+
+            if (frame.phase === 'done') {
+                for (let r = frame.r1; r <= frame.r2; r++) {
+                    for (let c = frame.c1; c <= frame.c2; c++) {
+                        document.getElementById(`c2d-${r}-${c}`).classList.add('final-best');
+                    }
+                }
+            }
+
+            // 更新仪表盘与进度
+            document.getElementById('valLocal').innerText = frame.localMax;
+            document.getElementById('valMax').innerText = frame.globalMax;
+            document.getElementById('narrative').innerHTML = frame.msg;
+            document.getElementById('progressFill').style.width = (idx / (frames.length - 1) * 100) + '%';
+            
+            document.getElementById('prevBtn').disabled = (idx === 0);
+            document.getElementById('nextBtn').disabled = (idx === frames.length - 1);
+            if(idx === frames.length - 1) pausePlay();
+        }
+
+        function nextStep() { if (currentFrameIdx < frames.length - 1) { currentFrameIdx++; renderFrame(currentFrameIdx); } }
+        function prevStep() { if (currentFrameIdx > 0) { currentFrameIdx--; renderFrame(currentFrameIdx); } }
+        
+        function togglePlay() {
+            if (playInterval) { pausePlay(); } 
+            else {
+                if (currentFrameIdx === frames.length - 1) currentFrameIdx = -1;
+                // 1.5秒一帧，留足时间观察二维到一维的映射关系
+                playInterval = setInterval(nextStep, 1500); 
+                document.getElementById('playBtn').innerText = '暂停 ⏸';
+                document.getElementById('playBtn').classList.add('primary-btn');
+            }
+        }
+        
+        function pausePlay() {
+            clearInterval(playInterval); playInterval = null;
+            document.getElementById('playBtn').innerText = '自动播放 ▶';
+            document.getElementById('playBtn').classList.remove('primary-btn');
+        }
+
+        function resetSimulation() {
+            pausePlay();
+            currentFrameIdx = 0;
+            renderFrame(currentFrameIdx);
+        }
+
+        window.onload = () => {
+            initGrids();
+            generateFrames();
+            renderFrame(0);
+        };
+    </script>
+</body>
+</html>

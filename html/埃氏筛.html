@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>修改版埃氏筛法 (第 K 个划掉的数)</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f7f6;
+            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .container {
+            background: white;
+            max-width: 790px;
+            width: 100%;
+            padding: 20px 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+        }
+
+        h2 { margin-top: 0; color: #2c3e50; text-align: center; border-bottom: 2px solid #eee; padding-bottom: 10px; font-size: 22px; }
+
+        /* 控制区 */
+        .controls { display: flex; justify-content: center; align-items: center; gap: 15px; margin-bottom: 15px; flex-wrap: wrap; background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #e9ecef;}
+        .control-group { display: flex; align-items: center; font-weight: bold; font-size: 14px; color: #495057;}
+        .control-group input[type="range"] { margin: 0 10px; cursor: pointer; width: 100px;}
+        .val-badge { background: #e9ecef; padding: 2px 8px; border-radius: 4px; min-width: 20px; text-align: center; color: #e74c3c; border: 1px solid #ced4da;}
+        
+        .btn-group { display: flex; gap: 8px; }
+        button { padding: 7px 12px; border: none; border-radius: 4px; font-size: 14px; cursor: pointer; font-weight: bold; transition: all 0.2s; }
+        .btn-step { background-color: #e67e22; color: white; }
+        .btn-step:hover { background-color: #d35400; }
+        .btn-play { background-color: #3498db; color: white; }
+        .btn-play:hover { background-color: #2980b9; }
+        .btn-reset { background-color: #95a5a6; color: white; }
+        button:disabled { background-color: #bdc3c7; cursor: not-allowed; transform: none; }
+
+        /* 状态看板 */
+        .status-board { display: flex; justify-content: space-between; align-items: center; background: #e8f4fd; padding: 12px 20px; border-radius: 6px; border-left: 5px solid #3498db; margin-bottom: 20px; font-size: 16px; }
+        .status-item { display: flex; flex-direction: column; align-items: center; }
+        .status-label { font-size: 12px; color: #7f8c8d; font-weight: bold; text-transform: uppercase;}
+        .status-val { font-size: 24px; font-weight: bold; color: #2c3e50; font-family: monospace;}
+        .highlight-val { color: #e74c3c; }
+
+        /* 网格区 */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(45px, 1fr));
+            gap: 8px;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #eef2f5;
+            border-radius: 8px;
+            border: 1px dashed #bdc3c7;
+        }
+
+        .cell {
+            aspect-ratio: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: white;
+            border: 2px solid #bdc3c7;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: bold;
+            color: #2c3e50;
+            transition: all 0.3s;
+            position: relative;
+        }
+
+        /* 状态样式 */
+        .cell.active-prime {
+            border-color: #3498db;
+            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.3);
+            background-color: #e8f4fd;
+        }
+        
+        .cell.crossed {
+            background-color: #ecf0f1;
+            color: #bdc3c7;
+            border-color: #ecf0f1;
+        }
+        .cell.crossed::after {
+            content: '';
+            position: absolute;
+            width: 80%;
+            height: 2px;
+            background-color: #e74c3c;
+            transform: rotate(-45deg);
+        }
+
+        .cell.just-crossed {
+            background-color: #f1c40f;
+            color: #d35400;
+            border-color: #f39c12;
+            transform: scale(1.15);
+            z-index: 10;
+        }
+        .cell.just-crossed::after {
+            display: none; /* 正在划的时候不显示红叉 */
+        }
+
+        .cell.final-target {
+            background-color: #e74c3c;
+            color: white;
+            border-color: #c0392b;
+            transform: scale(1.2);
+            box-shadow: 0 4px 15px rgba(231, 76, 60, 0.5);
+            z-index: 20;
+        }
+        .cell.final-target::after { display: none; }
+
+        /* 日志输出 */
+        .log-box { 
+            background: #2c3e50; 
+            color: #ecf0f1; 
+            padding: 12px 15px; 
+            border-radius: 6px; 
+            font-family: monospace; 
+            font-size: 14px; 
+            height: 120px; 
+            overflow-y: auto;
+            border: 1px solid #1a252f;
+        }
+        .log-entry { margin-bottom: 5px; border-bottom: 1px dashed #34495e; padding-bottom: 3px; }
+        .log-prime { color: #3498db; font-weight: bold; }
+        .log-cross { color: #f1c40f; font-weight: bold; }
+        .log-success { color: #2ecc71; font-weight: bold; font-size: 15px;}
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>埃氏筛法：寻找第 K 个被划掉的数</h2>
+    
+    <div class="controls">
+        <div class="control-group">
+            范围 N: <input type="range" id="nSlider" min="10" max="50" value="15">
+            <span class="val-badge" id="nVal">15</span>
+        </div>
+        <div class="control-group">
+            目标 K: <input type="range" id="kSlider" min="1" max="14" value="12">
+            <span class="val-badge" id="kVal">12</span>
+        </div>
+        <div class="btn-group">
+            <button class="btn-step" id="btnStep" onclick="nextStep()">👣 单步执行</button>
+            <button class="btn-play" id="btnPlay" onclick="autoPlay()">▶ 自动播放</button>
+            <button class="btn-reset" onclick="resetAll()">重置</button>
+        </div>
+    </div>
+
+    <div class="status-board">
+        <div class="status-item">
+            <span class="status-label">当前工作的素数 (p)</span>
+            <span class="status-val" id="primeDisplay" style="color: #3498db;">等待...</span>
+        </div>
+        <div class="status-item">
+            <span class="status-label">当前倍数 (m)</span>
+            <span class="status-val" id="multDisplay">等待...</span>
+        </div>
+        <div class="status-item" style="border-left: 1px solid #bdc3c7; padding-left: 20px;">
+            <span class="status-label">已划掉数量 (Count)</span>
+            <span class="status-val highlight-val" id="countDisplay">0 / 12</span>
+        </div>
+    </div>
+
+    <div class="grid" id="gridContainer">
+        </div>
+
+    <div class="log-box" id="logBox">
+        <div style="color:#bdc3c7;">初始化完毕。点击“单步执行”开始模拟。</div>
+    </div>
+</div>
+
+<script>
+    let N = 15;
+    let K = 12;
+    let crossed = [];
+    
+    // 状态机变量
+    let count = 0;
+    let p = 2;
+    let m = 0;
+    let isPrimeActive = false;
+    let isDone = false;
+    let autoTimer = null;
+    let lastCrossedM = -1;
+
+    // DOM Elements
+    const nSlider = document.getElementById('nSlider');
+    const kSlider = document.getElementById('kSlider');
+    const nVal = document.getElementById('nVal');
+    const kVal = document.getElementById('kVal');
+    const gridContainer = document.getElementById('gridContainer');
+    const logBox = document.getElementById('logBox');
+    const primeDisplay = document.getElementById('primeDisplay');
+    const multDisplay = document.getElementById('multDisplay');
+    const countDisplay = document.getElementById('countDisplay');
+    const btnStep = document.getElementById('btnStep');
+    const btnPlay = document.getElementById('btnPlay');
+
+    function log(html) {
+        const entry = document.createElement('div');
+        entry.className = 'log-entry';
+        entry.innerHTML = html;
+        logBox.appendChild(entry);
+        logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    function initGrid() {
+        gridContainer.innerHTML = '';
+        for (let i = 2; i <= N; i++) {
+            const cell = document.createElement('div');
+            cell.className = 'cell';
+            cell.id = 'cell-' + i;
+            cell.innerText = i;
+            gridContainer.appendChild(cell);
+        }
+    }
+
+    function resetAll() {
+        clearTimeout(autoTimer);
+        crossed = new Array(N + 1).fill(false);
+        count = 0;
+        p = 2;
+        m = 0;
+        isPrimeActive = false;
+        isDone = false;
+        lastCrossedM = -1;
+
+        countDisplay.innerText = `${count} / ${K}`;
+        primeDisplay.innerText = '等待...';
+        multDisplay.innerText = '等待...';
+        logBox.innerHTML = '<div style="color:#bdc3c7;">已重置。数组状态清零。</div>';
+        
+        btnStep.disabled = false;
+        btnPlay.disabled = false;
+        nSlider.disabled = false;
+        kSlider.disabled = false;
+
+        initGrid();
+    }
+
+    function updateKMax() {
+        // N个数字中，从2到N共N-1个数，最多只能划掉N-1个
+        const maxK = N - 1;
+        kSlider.max = maxK;
+        if (K > maxK) {
+            K = maxK;
+            kSlider.value = K;
+            kVal.innerText = K;
+        }
+    }
+
+    function nextStep() {
+        if (isDone) return;
+        
+        nSlider.disabled = true;
+        kSlider.disabled = true;
+
+        // 清除上一轮的"刚划掉"高亮，变为普通的"已划掉"
+        if (lastCrossedM !== -1) {
+            const lastCell = document.getElementById('cell-' + lastCrossedM);
+            if(lastCell) {
+                lastCell.classList.remove('just-crossed');
+                lastCell.classList.add('crossed');
+            }
+        }
+
+        // 核心算法模拟步进
+        while (p <= N) {
+            // 1. 寻找尚未删除的最小数 p
+            if (!isPrimeActive) {
+                if (!crossed[p]) {
+                    isPrimeActive = true;
+                    m = p; // 内层循环从 p 本身开始
+                    
+                    // UI 更新：当前工作的素数
+                    primeDisplay.innerText = p;
+                    document.querySelectorAll('.cell').forEach(c => c.classList.remove('active-prime'));
+                    document.getElementById('cell-' + p).classList.add('active-prime');
+                    
+                    log(`➡ 找到未被划掉的最小数：<span class="log-prime">p = ${p}</span>`);
+                } else {
+                    p++;
+                    continue; // 继续找下一个
+                }
+            }
+
+            // 2. 遍历倍数 m
+            if (isPrimeActive) {
+                while (m <= N) {
+                    let currentM = m;
+                    m += p; // 提前为下一轮跳步
+                    
+                    multDisplay.innerText = currentM;
+
+                    // 只有没被划掉的，才进行操作
+                    if (!crossed[currentM]) {
+                        crossed[currentM] = true;
+                        count++;
+                        lastCrossedM = currentM;
+
+                        // UI 更新：划掉效果
+                        const cell = document.getElementById('cell-' + currentM);
+                        cell.classList.add('just-crossed');
+                        countDisplay.innerText = `${count} / ${K}`;
+
+                        log(`划掉 <span class="log-cross">${currentM}</span> (它是 ${p} 的倍数) -> 累计划掉 <b>${count}</b> 个`);
+
+                        // 判断是否到达目标 K
+                        if (count === K) {
+                            isDone = true;
+                            btnStep.disabled = true;
+                            btnPlay.disabled = true;
+                            
+                            // 最终结果高亮
+                            cell.classList.remove('just-crossed');
+                            cell.classList.add('final-target');
+                            log(`<br><span class="log-success">🎉 成功！第 ${K} 个被划掉的数是：${currentM}</span>`);
+                        }
+                        return; // 中断 while 循环，把控制权交还给 UI 动画帧
+                    }
+                }
+                
+                // 倍数遍历完，结束当前 p
+                isPrimeActive = false;
+                document.getElementById('cell-' + p).classList.remove('active-prime');
+                p++;
+            }
+        }
+        
+        // 如果异常跑完没达到 K (理论上 K <= N-1 不会发生)
+        if (!isDone) {
+            log(`<span style="color:#e74c3c;">数组已全部遍历完毕。</span>`);
+            isDone = true;
+            btnStep.disabled = true;
+            btnPlay.disabled = true;
+        }
+    }
+
+    function autoPlay() {
+        btnPlay.disabled = true;
+        btnStep.disabled = true;
+        
+        function loop() {
+            if (!isDone) {
+                nextStep();
+                autoTimer = setTimeout(loop, 700); // 700ms 演示一步
+            }
+        }
+        loop();
+    }
+
+    // 事件监听
+    nSlider.addEventListener('input', (e) => {
+        N = parseInt(e.target.value);
+        nVal.innerText = N;
+        updateKMax();
+        resetAll();
+    });
+
+    kSlider.addEventListener('input', (e) => {
+        K = parseInt(e.target.value);
+        kVal.innerText = K;
+        resetAll();
+    });
+
+    // 初始化
+    updateKMax();
+    resetAll();
+
+</script>
+</body>
+</html>

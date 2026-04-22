@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>计数排序(桶思想) - 键盘打字模拟</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f7f6;
+            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .container {
+            background: white;
+            max-width: 790px;
+            width: 100%;
+            padding: 20px 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            box-sizing: border-box;
+        }
+
+        h2 { margin-top: 0; color: #2c3e50; text-align: center; border-bottom: 2px solid #eee; padding-bottom: 10px; font-size: 22px; }
+
+        /* 控制区 */
+        .controls { display: flex; justify-content: center; align-items: center; gap: 10px; margin-bottom: 20px; }
+        input[type="text"] { padding: 8px 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 4px; width: 220px; text-transform: uppercase; font-family: monospace; }
+        button { padding: 8px 15px; border: none; border-radius: 4px; font-size: 15px; cursor: pointer; font-weight: bold; transition: all 0.2s; }
+        .btn-play { background-color: #3498db; color: white; }
+        .btn-play:hover { background-color: #2980b9; }
+        .btn-step { background-color: #e67e22; color: white; }
+        .btn-step:hover { background-color: #d35400; }
+        .btn-reset { background-color: #95a5a6; color: white; }
+        button:disabled { background-color: #bdc3c7; cursor: not-allowed; transform: none; }
+
+        /* 字符串显示区 */
+        .string-display { text-align: center; font-size: 20px; font-family: monospace; font-weight: bold; margin-bottom: 15px; letter-spacing: 3px; background: #f8f9fa; padding: 10px; border-radius: 6px;}
+        .char-normal { color: #7f8c8d; }
+        .char-active { color: #e74c3c; transform: scale(1.4); display: inline-block; transition: all 0.2s; }
+        .char-done { color: #2c3e50; }
+
+        /* 标题分界线 */
+        .section-title { font-size: 15px; font-weight: bold; color: #34495e; margin: 15px 0 10px 0; display: flex; align-items: center; }
+        .section-title::after { content: ""; flex: 1; height: 1px; background: #ecf0f1; margin-left: 10px; }
+
+        /* 桶显示区 (Phase 1) */
+        .buckets { display: flex; flex-wrap: wrap; gap: 8px; min-height: 50px; padding: 10px; background: #eef2f5; border-radius: 6px; border: 1px dashed #bdc3c7;}
+        .bucket { display: flex; flex-direction: column; align-items: center; background: white; border: 2px solid #bdc3c7; border-radius: 6px; width: 45px; overflow: hidden; transition: transform 0.2s; }
+        .bucket.active { border-color: #e74c3c; transform: translateY(-3px); box-shadow: 0 4px 8px rgba(231,76,60,0.2); }
+        .bucket.highlight-phase2 { border-color: #2ecc71; background-color: #e8f8f5; transform: scale(1.1); z-index: 10;}
+        .b-char { background: #34495e; color: white; width: 100%; text-align: center; font-family: monospace; font-weight: bold; padding: 2px 0; font-size: 14px;}
+        .b-val { padding: 4px 0; font-weight: bold; font-size: 16px; color: #2c3e50; }
+
+        /* 汇总区 (Phase 2) */
+        .counters { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 15px; }
+        .counter-box { flex: 1; display: flex; flex-direction: column; align-items: center; background: #f8f9fa; border-radius: 6px; padding: 8px 4px; border: 2px solid transparent; transition: all 0.3s;}
+        .counter-box.active { transform: scale(1.1); box-shadow: 0 4px 10px rgba(0,0,0,0.15); border-color: #2c3e50; z-index: 10;}
+        .finger-name { font-size: 12px; font-weight: bold; margin-bottom: 5px; color: #555; text-align: center; white-space: nowrap;}
+        .finger-val { font-size: 22px; font-weight: bold; background: white; width: 100%; text-align: center; border-radius: 4px; padding: 4px 0; }
+        
+        /* 手指颜色 */
+        .finger-0 .finger-val { border-bottom: 4px solid #ff9ff3; } 
+        .finger-1 .finger-val { border-bottom: 4px solid #feca57; } 
+        .finger-2 .finger-val { border-bottom: 4px solid #ff6b6b; } 
+        .finger-3 .finger-val { border-bottom: 4px solid #1dd1a1; } 
+        .finger-4 .finger-val { border-bottom: 4px solid #48dbfb; } 
+        .finger-5 .finger-val { border-bottom: 4px solid #54a0ff; } 
+        .finger-6 .finger-val { border-bottom: 4px solid #5f27cd; } 
+        .finger-7 .finger-val { border-bottom: 4px solid #c8d6e5; } 
+
+        /* 日志输出 */
+        .log-box { background: #2c3e50; color: #ecf0f1; padding: 12px 15px; border-radius: 6px; font-family: monospace; font-size: 14px; min-height: 80px; }
+        .log-highlight { color: #f1c40f; font-weight: bold; font-size: 16px;}
+        .log-math { color: #2ecc71; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>方法二：计数排序(桶思想) 演示</h2>
+    
+    <div class="controls">
+        <input type="text" id="inputStr" value="AON=BOO;" maxlength="30" placeholder="大写字符">
+        <button class="btn-step" id="btnStep" onclick="nextStep()">👣 单步执行</button>
+        <button class="btn-play" id="btnPlay" onclick="autoPlay()">▶ 自动播放</button>
+        <button class="btn-reset" onclick="resetAll()">重置</button>
+    </div>
+
+    <div class="string-display" id="strDisplay"></div>
+
+    <div class="section-title">阶段一：扫描字符串，存入频率桶 (O(|S|) 时间)</div>
+    <div class="buckets" id="bucketsContainer">
+        <span style="color:#95a5a6; font-size:13px; margin:auto;">等待扫描...</span>
+    </div>
+
+    <div class="section-title">阶段二：按手指责任区汇总频率 (常数时间)</div>
+    <div class="counters">
+        <div class="counter-box finger-0" id="cnt-0"><div class="finger-name">0:左小指</div><div class="finger-val" id="val-0">0</div></div>
+        <div class="counter-box finger-1" id="cnt-1"><div class="finger-name">1:左无名</div><div class="finger-val" id="val-1">0</div></div>
+        <div class="counter-box finger-2" id="cnt-2"><div class="finger-name">2:左中指</div><div class="finger-val" id="val-2">0</div></div>
+        <div class="counter-box finger-3" id="cnt-3"><div class="finger-name">3:左食指</div><div class="finger-val" id="val-3">0</div></div>
+        <div class="counter-box finger-4" id="cnt-4"><div class="finger-name">4:右食指</div><div class="finger-val" id="val-4">0</div></div>
+        <div class="counter-box finger-5" id="cnt-5"><div class="finger-name">5:右中指</div><div class="finger-val" id="val-5">0</div></div>
+        <div class="counter-box finger-6" id="cnt-6"><div class="finger-name">6:右无名</div><div class="finger-val" id="val-6">0</div></div>
+        <div class="counter-box finger-7" id="cnt-7"><div class="finger-name">7:右小指</div><div class="finger-val" id="val-7">0</div></div>
+    </div>
+
+    <div class="log-box" id="logBox">
+        就绪。点击“单步执行”或“自动播放”开始。
+    </div>
+</div>
+
+<script>
+    const keysTable = [
+        "1QAZ", "2WSX", "3EDC", "45RTFGVB",
+        "67YUHJNM", "8IK,", "9OL.", "0-=P[];'/"
+    ];
+
+    let state = 'IDLE'; // IDLE, PHASE1, PHASE2, DONE
+    let freqMap = {};
+    let stepIdx = 0;
+    let fingerIdx = 0;
+    let autoTimer = null;
+
+    function renderString(str, activeIdx) {
+        const display = document.getElementById('strDisplay');
+        display.innerHTML = '';
+        for (let i = 0; i < str.length; i++) {
+            const span = document.createElement('span');
+            span.innerText = str[i];
+            if (i < activeIdx) span.className = 'char-done';
+            else if (i === activeIdx) span.className = 'char-active';
+            else span.className = 'char-normal';
+            display.appendChild(span);
+        }
+    }
+
+    function createOrUpdateBucket(char, count) {
+        const container = document.getElementById('bucketsContainer');
+        if (Object.keys(freqMap).length === 1 && count === 1) container.innerHTML = ''; // 清除"等待扫描"
+        
+        let bucket = document.getElementById('bucket-' + char);
+        if (!bucket) {
+            bucket = document.createElement('div');
+            bucket.className = 'bucket active';
+            bucket.id = 'bucket-' + char;
+            bucket.innerHTML = `<div class="b-char">${char}</div><div class="b-val" id="bval-${char}">${count}</div>`;
+            container.appendChild(bucket);
+        } else {
+            document.getElementById('bval-' + char).innerText = count;
+            bucket.classList.remove('active');
+            void bucket.offsetWidth; // 触发重绘重置动画
+            bucket.classList.add('active');
+        }
+    }
+
+    function resetAll() {
+        clearTimeout(autoTimer);
+        state = 'IDLE';
+        freqMap = {};
+        stepIdx = 0;
+        fingerIdx = 0;
+        document.getElementById('bucketsContainer').innerHTML = '<span style="color:#95a5a6; font-size:13px; margin:auto;">等待扫描...</span>';
+        for(let i=0; i<8; i++) {
+            document.getElementById(`val-${i}`).innerText = 0;
+            document.getElementById(`cnt-${i}`).classList.remove('active');
+        }
+        document.getElementById('btnStep').disabled = false;
+        document.getElementById('btnPlay').disabled = false;
+        document.getElementById('inputStr').disabled = false;
+        document.getElementById('logBox').innerHTML = '已重置。';
+        renderString(document.getElementById('inputStr').value.toUpperCase(), -1);
+    }
+
+    function clearHighlights() {
+        document.querySelectorAll('.bucket').forEach(b => b.classList.remove('active', 'highlight-phase2'));
+        document.querySelectorAll('.counter-box').forEach(c => c.classList.remove('active'));
+    }
+
+    function nextStep() {
+        const inputStr = document.getElementById('inputStr').value.toUpperCase();
+        if(!inputStr) return;
+        document.getElementById('inputStr').disabled = true;
+
+        const logBox = document.getElementById('logBox');
+        clearHighlights();
+
+        if (state === 'IDLE') {
+            state = 'PHASE1';
+            stepIdx = 0;
+            freqMap = {};
+        }
+
+        // --- 阶段一：扫描字符串建立哈希桶 ---
+        if (state === 'PHASE1') {
+            if (stepIdx < inputStr.length) {
+                const char = inputStr[stepIdx];
+                freqMap[char] = (freqMap[char] || 0) + 1;
+                renderString(inputStr, stepIdx);
+                createOrUpdateBucket(char, freqMap[char]);
+                
+                logBox.innerHTML = `【阶段一】读取第 ${stepIdx+1} 个字符：<span class="log-highlight">'${char}'</span><br>` +
+                                   `执行: <span style="color:#bdc3c7;">freq['${char}']++</span> => 当前频率：${freqMap[char]}`;
+                stepIdx++;
+            } else {
+                state = 'PHASE2';
+                fingerIdx = 0;
+                renderString(inputStr, inputStr.length);
+                logBox.innerHTML = `【阶段一完成】所有字符频率统计完毕！<br><span class="log-math">接下来进入阶段二：按手指汇总。不需要再重新遍历字符串了。</span>`;
+            }
+            return;
+        }
+
+        // --- 阶段二：汇总输出 ---
+        if (state === 'PHASE2') {
+            if (fingerIdx < 8) {
+                const keys = keysTable[fingerIdx];
+                let sum = 0;
+                let mathStrArr = [];
+
+                // 检查该手指负责的所有字符
+                for(let i=0; i<keys.length; i++) {
+                    const k = keys[i];
+                    const val = freqMap[k] || 0;
+                    sum += val;
+                    if (val > 0) {
+                        mathStrArr.push(`freq['${k}'](${val})`);
+                        // 高亮被用到的桶
+                        const bucketElem = document.getElementById('bucket-' + k);
+                        if (bucketElem) bucketElem.classList.add('highlight-phase2');
+                    }
+                }
+
+                // 更新手指UI
+                const cntElem = document.getElementById(`cnt-${fingerIdx}`);
+                cntElem.classList.add('active');
+                document.getElementById(`val-${fingerIdx}`).innerText = sum;
+
+                let mathStr = mathStrArr.length > 0 ? mathStrArr.join(' + ') : '0';
+                logBox.innerHTML = `【阶段二】统计手指 <span class="log-highlight">${fingerIdx}</span> 负责的按键: [${keys}]<br>` +
+                                   `查表累加: ${mathStr} = <span class="log-math" style="font-size:18px;">${sum}</span>`;
+                
+                fingerIdx++;
+            } else {
+                state = 'DONE';
+                document.getElementById('btnStep').disabled = true;
+                document.getElementById('btnPlay').disabled = true;
+                logBox.innerHTML = `✅ 演示结束！<br>
+                <span style="color:#bdc3c7; font-size:12px;">对比总结：这种算法无论手指负责多少个字符，原字符串有多长，阶段二的查找次数是恒定的(固定几十次)，极大优化了效率。</span>`;
+            }
+            return;
+        }
+    }
+
+    function autoPlay() {
+        document.getElementById('btnPlay').disabled = true;
+        document.getElementById('btnStep').disabled = true;
+        
+        function loop() {
+            if (state !== 'DONE') {
+                nextStep();
+                let delay = state === 'PHASE2' ? 1200 : 500; // 阶段二慢一点方便看算式
+                autoTimer = setTimeout(loop, delay);
+            }
+        }
+        loop();
+    }
+
+    // 初始化
+    window.onload = () => renderString(document.getElementById('inputStr').value.toUpperCase(), -1);
+    document.getElementById('inputStr').addEventListener('input', function(e) {
+        if(state === 'IDLE') renderString(e.target.value.toUpperCase(), -1);
+    });
+</script>
+</body>
+</html>

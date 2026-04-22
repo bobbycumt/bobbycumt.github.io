@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>进制转换按权展开演示</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            /* 保证在 iframe 嵌入时背景透明或适配深色主题 */
+            background-color: transparent; 
+            font-family: system-ui, -apple-system, sans-serif;
+            display: flex;
+            justify-content: center;
+            padding: 20px;
+        }
+        /* 核心容器限制宽度 790px */
+        .widget-container {
+            width: 100%;
+            max-width: 790px;
+            min-height: 400px;
+            /* 确保嵌入时高度不会撑破 700px 的限制 */
+            max-height: 700px; 
+            overflow-y: auto;
+        }
+        .fade-in {
+            animation: fadeIn 0.3s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        /* 自定义滚动条 */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #1e293b; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+    </style>
+</head>
+<body>
+
+    <div class="widget-container bg-slate-800 rounded-xl shadow-2xl p-6 border border-slate-700 flex flex-col text-slate-200">
+        
+        <div class="mb-6 border-b border-slate-700 pb-4">
+            <h2 class="text-2xl font-bold text-sky-400 flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+                进制转换：按权展开推导器
+            </h2>
+            <p class="text-sm text-slate-400 mt-1">输入二进制或十六进制数，动态观察其转换为十进制的具体计算过程。</p>
+        </div>
+
+        <div class="flex flex-col sm:flex-row gap-4 mb-6">
+            <div class="flex-1">
+                <label class="block text-sm font-medium text-slate-400 mb-1">选择转换模式</label>
+                <select id="baseSelect" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-3 text-sky-300 focus:outline-none focus:border-sky-500 font-medium">
+                    <option value="2">二进制 (Binary) ➝ 十进制</option>
+                    <option value="16">十六进制 (Hex) ➝ 十进制</option>
+                </select>
+            </div>
+            <div class="flex-1">
+                <label class="block text-sm font-medium text-slate-400 mb-1">输入数字 (最多 8 位)</label>
+                <input type="text" id="numInput" value="1011" maxlength="8" autocomplete="off"
+                    class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-3 text-white font-mono text-lg focus:outline-none focus:border-sky-500 transition-colors placeholder-slate-600 uppercase">
+                <div id="errorMsg" class="text-rose-400 text-sm mt-1 h-5 hidden fade-in">
+                    输入包含非法字符！
+                </div>
+            </div>
+        </div>
+
+        <div id="processArea" class="flex flex-col flex-1 bg-slate-900/50 rounded-lg p-5 border border-slate-700/50">
+            <div class="text-sm text-slate-400 mb-4 font-medium flex items-center justify-between">
+                <span>1. 拆分数字并分配权重 (基数的 N 次幂)</span>
+                <span class="text-xs bg-slate-700 px-2 py-1 rounded text-slate-300">从右向左，指数 N 从 0 开始</span>
+            </div>
+            
+            <div id="cardsContainer" class="flex flex-wrap gap-3 justify-center mb-8 fade-in">
+                </div>
+
+            <div class="mt-auto border-t border-slate-700 pt-5 fade-in">
+                <div class="text-sm text-slate-400 mb-2 font-medium">2. 完整求和算式</div>
+                <div id="equationText" class="font-mono text-slate-300 bg-slate-800 p-3 rounded text-center mb-4 leading-relaxed break-all">
+                    </div>
+                
+                <div class="flex items-center justify-between bg-sky-900/20 border border-sky-800/50 rounded-lg p-4">
+                    <span class="text-slate-300 font-medium">3. 最终十进制结果</span>
+                    <div class="text-3xl font-bold text-sky-400 font-mono tracking-wider drop-shadow-md" id="finalResult">
+                        11
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const baseSelect = document.getElementById('baseSelect');
+        const numInput = document.getElementById('numInput');
+        const errorMsg = document.getElementById('errorMsg');
+        const processArea = document.getElementById('processArea');
+        const cardsContainer = document.getElementById('cardsContainer');
+        const equationText = document.getElementById('equationText');
+        const finalResult = document.getElementById('finalResult');
+
+        // 验证输入是否合法
+        function validateInput(val, base) {
+            if (val === '') return { valid: false, msg: '输入不能为空' };
+            if (base === 2 && !/^[01]+$/.test(val)) return { valid: false, msg: '二进制只能包含数字 0 和 1' };
+            if (base === 16 && !/^[0-9A-Fa-f]+$/.test(val)) return { valid: false, msg: '十六进制只能包含 0-9 和 A-F' };
+            return { valid: true };
+        }
+
+        // 核心渲染逻辑
+        function renderProcess() {
+            let val = numInput.value.toUpperCase();
+            const base = parseInt(baseSelect.value);
+
+            const validation = validateInput(val, base);
+            
+            if (!validation.valid && val !== '') {
+                errorMsg.textContent = validation.msg;
+                errorMsg.classList.remove('hidden');
+                numInput.classList.add('border-rose-500', 'focus:border-rose-500');
+                processArea.style.opacity = '0.3';
+                processArea.style.pointerEvents = 'none';
+                return;
+            }
+
+            // 清除错误状态
+            errorMsg.classList.add('hidden');
+            numInput.classList.remove('border-rose-500', 'focus:border-rose-500');
+            processArea.style.opacity = '1';
+            processArea.style.pointerEvents = 'auto';
+
+            if (val === '') {
+                cardsContainer.innerHTML = '';
+                equationText.innerHTML = '';
+                finalResult.textContent = '0';
+                return;
+            }
+
+            let cardsHtml = '';
+            let equationParts = [];
+            let calculationParts = [];
+            let totalSum = 0;
+            const len = val.length;
+
+            for (let i = 0; i < len; i++) {
+                const char = val[i];
+                const power = len - 1 - i;
+                const numValue = parseInt(char, base);
+                const multiplier = Math.pow(base, power);
+                const product = numValue * multiplier;
+                
+                totalSum += product;
+
+                // 针对十六进制字母的特殊提示
+                let hexHint = '';
+                if (base === 16 && isNaN(parseInt(char, 10))) {
+                    hexHint = `<div class="text-[0.65rem] text-amber-400 mt-1 font-bold tracking-wide">${char} = ${numValue}</div>`;
+                }
+
+                // 生成单独的卡片
+                cardsHtml += `
+                    <div class="bg-slate-800 p-3 rounded-lg flex flex-col items-center justify-center min-w-[80px] border border-slate-600 shadow-md transform transition hover:-translate-y-1 hover:border-sky-400">
+                        <div class="text-2xl font-bold text-white font-mono">${char}</div>
+                        ${hexHint}
+                        <div class="text-sm text-sky-300 mt-2 whitespace-nowrap">× ${base}<sup class="text-xs">${power}</sup></div>
+                        <div class="text-xs text-slate-400 mt-2 pt-2 border-t border-slate-700 w-full text-center">= ${product}</div>
+                    </div>
+                `;
+
+                // 拼接公式
+                equationParts.push(`(${numValue} × ${base}<sup class="text-[0.6rem]">${power}</sup>)`);
+                calculationParts.push(product);
+            }
+
+            // 渲染 DOM
+            cardsContainer.innerHTML = cardsHtml;
+            equationText.innerHTML = `${equationParts.join(' <span class="text-sky-500">+</span> ')} <br> <span class="text-slate-500 mt-2 inline-block">= ${calculationParts.join(' + ')}</span>`;
+            
+            // 结果动画跳动效果
+            finalResult.textContent = totalSum;
+            finalResult.classList.remove('fade-in');
+            void finalResult.offsetWidth; // 触发重绘
+            finalResult.classList.add('fade-in');
+        }
+
+        // 监听事件
+        numInput.addEventListener('input', renderProcess);
+        baseSelect.addEventListener('change', () => {
+            // 切换进制时，清空输入框并设置默认值以防报错展示
+            if (baseSelect.value === "2") {
+                numInput.value = "1011";
+            } else {
+                numInput.value = "2F";
+            }
+            renderProcess();
+        });
+
+        // 初始渲染
+        renderProcess();
+    </script>
+</body>
+</html>

@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NOIP2011 地毯铺设演示沙盘</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f7f6;
+            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh; /* 允许内容高度超过一屏 */
+            margin: 0;
+            padding: 20px; /* 为小屏幕预留边距 */
+            box-sizing: border-box;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column; /* 【关键修改：改为垂直布局】 */
+            align-items: center;    /* 【关键修改：内容居中对齐】 */
+            gap: 25px;              /* 【关键修改：调整上下间距】 */
+            max-width: 510px;       /* 限制最大宽度，使其在桌面端也美观 */
+            width: 100%;
+        }
+        .panel {
+            display: flex;
+            flex-direction: column;
+            width: 100%;            /* 【关键修改：占据容器宽度】 */
+            box-sizing: border-box;
+        }
+        h2 { margin-top: 0; font-size: 20px; color: #2c3e50; text-align: center; }
+        .control-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: flex;
+            justify-content: space-between;
+            font-weight: bold;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+        input[type=range] {
+            width: 100%;
+            cursor: pointer;
+        }
+        .result-box {
+            margin-top: 10px;
+            padding: 15px;
+            background-color: #e8f4fd;
+            border-left: 4px solid #3498db;
+            border-radius: 4px;
+            font-size: 16px;
+            text-align: center;    /* 结果内容居中 */
+        }
+        .result-box span {
+            font-weight: bold;
+            color: #e74c3c;
+            font-size: 20px;
+        }
+        canvas {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: #fafafa;
+            /* 确保 Canvas 在不同屏幕下也能正确显示，保持比例 */
+            max-width: 100%; 
+            height: auto;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <canvas id="carpetCanvas" width="450" height="450"></canvas>
+
+    <div class="panel">
+        <h2>参数控制</h2>
+        
+        <div class="control-group">
+            <label>铺设进度 (当前地毯数): <span id="stepVal">3</span></label>
+            <input type="range" id="stepSlider" min="0" max="3" value="3" step="1">
+        </div>
+
+        <div class="control-group">
+            <label>目标点 X 坐标: <span id="xVal">2</span></label>
+            <input type="range" id="xSlider" min="0" max="6" value="2" step="1">
+        </div>
+
+        <div class="control-group">
+            <label>目标点 Y 坐标: <span id="yVal">2</span></label>
+            <input type="range" id="ySlider" min="0" max="6" value="2" step="1">
+        </div>
+
+        <div class="result-box">
+            覆盖点 (<span id="dispX">2</span>, <span id="dispY">2</span>)<br>
+            最上面的地毯编号: <br><br>
+            <span id="ansVal">3</span>
+        </div>
+        
+        <p style="font-size:12px; color:#7f8c8d; margin-top:20px; text-align: center;">
+            * 此沙盘使用样例 1 的数据。<br>
+            半透明颜色便于观察覆盖关系。
+        </p>
+    </div>
+</div>
+
+<script>
+    // 【JavaScript 逻辑完全保持不变】
+    
+    // 样例数据：地毯集合 (id, x, y, width, height)
+    const carpets = [
+        { id: 1, x: 1, y: 0, w: 2, h: 3, color: 'rgba(231, 76, 60, 0.6)' },  // 红色
+        { id: 2, x: 0, y: 2, w: 3, h: 3, color: 'rgba(52, 152, 219, 0.6)' }, // 蓝色
+        { id: 3, x: 2, y: 1, w: 3, h: 3, color: 'rgba(46, 204, 113, 0.6)' }  // 绿色
+    ];
+
+    // 获取 DOM 元素
+    const canvas = document.getElementById('carpetCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    const stepSlider = document.getElementById('stepSlider');
+    const xSlider = document.getElementById('xSlider');
+    const ySlider = document.getElementById('ySlider');
+    
+    const elements = {
+        step: document.getElementById('stepVal'),
+        x: document.getElementById('xVal'),
+        y: document.getElementById('yVal'),
+        dispX: document.getElementById('dispX'),
+        dispY: document.getElementById('dispY'),
+        ans: document.getElementById('ansVal')
+    };
+
+    // 坐标系转换配置
+    const config = {
+        margin: 40,
+        gridSize: 60, // 每个单位占据的像素
+        maxCoord: 6   // 最大坐标范围
+    };
+
+    // 将数学坐标转换为 Canvas 像素坐标 (Canvas 原点在左上角，Y轴向下)
+    function toScreenX(x) { return config.margin + x * config.gridSize; }
+    function toScreenY(y) { return canvas.height - config.margin - y * config.gridSize; }
+
+    // 绘制坐标网格
+    function drawGrid() {
+        ctx.strokeStyle = '#e0e0e0';
+        ctx.fillStyle = '#999';
+        ctx.font = '12px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        for (let i = 0; i <= config.maxCoord; i++) {
+            // 垂直线 & X轴数字
+            ctx.beginPath();
+            ctx.moveTo(toScreenX(i), toScreenY(0));
+            ctx.lineTo(toScreenX(i), toScreenY(config.maxCoord));
+            ctx.stroke();
+            ctx.fillText(i, toScreenX(i), toScreenY(0) + 15);
+
+            // 水平线 & Y轴数字
+            ctx.beginPath();
+            ctx.moveTo(toScreenX(0), toScreenY(i));
+            ctx.lineTo(toScreenX(config.maxCoord), toScreenY(i));
+            ctx.stroke();
+            if (i !== 0) ctx.fillText(i, toScreenX(0) - 15, toScreenY(i));
+        }
+    }
+
+    // 计算逻辑：逆向查找最上面的地毯
+    function getTopCarpet(px, py, currentStep) {
+        // 从当前铺设的最后一张地毯开始往前找
+        for (let i = currentStep - 1; i >= 0; i--) {
+            let c = carpets[i];
+            if (px >= c.x && px <= c.x + c.w && py >= c.y && py <= c.y + c.h) {
+                return c.id;
+            }
+        }
+        return -1;
+    }
+
+    // 主绘制函数
+    function render() {
+        // 获取当前状态
+        const step = parseInt(stepSlider.value);
+        const targetX = parseInt(xSlider.value);
+        const targetY = parseInt(ySlider.value);
+
+        // 更新文本显示
+        elements.step.innerText = step;
+        elements.x.innerText = targetX;
+        elements.y.innerText = targetY;
+        elements.dispX.innerText = targetX;
+        elements.dispY.innerText = targetY;
+
+        // 清空画布
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        drawGrid();
+
+        // 绘制地毯 (按照 1 到 step 的顺序)
+        for (let i = 0; i < step; i++) {
+            let c = carpets[i];
+            ctx.fillStyle = c.color;
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 1;
+            
+            // Canvas 中矩形绘制：x, y(左上角), 宽, 高
+            let rectX = toScreenX(c.x);
+            let rectY = toScreenY(c.y + c.h); // Y轴取反，所以左上角是 y + h
+            let rectW = c.w * config.gridSize;
+            let rectH = c.h * config.gridSize;
+
+            ctx.fillRect(rectX, rectY, rectW, rectH);
+            ctx.strokeRect(rectX, rectY, rectW, rectH);
+
+            // 标注编号在中心
+            ctx.fillStyle = '#000';
+            ctx.font = 'bold 20px Arial';
+            ctx.fillText(c.id, rectX + rectW/2, rectY + rectH/2);
+        }
+
+        // 绘制目标点
+        let screenPx = toScreenX(targetX);
+        let screenPy = toScreenY(targetY);
+        
+        ctx.beginPath();
+        ctx.arc(screenPx, screenPy, 6, 0, Math.PI * 2);
+        ctx.fillStyle = '#f1c40f'; // 黄色点
+        ctx.fill();
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // 计算并显示结果
+        let ans = getTopCarpet(targetX, targetY, step);
+        elements.ans.innerText = ans;
+        elements.ans.style.color = ans === -1 ? '#7f8c8d' : '#e74c3c';
+    }
+
+    // 绑定事件监听器
+    stepSlider.addEventListener('input', render);
+    xSlider.addEventListener('input', render);
+    ySlider.addEventListener('input', render);
+
+    // 初始渲染
+    render();
+</script>
+
+</body>
+</html>

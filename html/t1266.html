@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>资源分配 DP 沙盘 (分组背包)</title>
+    <style>
+        :root {
+            --bg-color: #f4f7f6; --primary: #2c3e50; --success: #2ecc71; 
+            --warning: #f39c12; --highlight: #3498db; --text: #333;
+            --cell-bg: #fff; --header-bg: #ecf0f1; --path: #8e44ad;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, sans-serif; background: var(--bg-color); color: var(--text);
+            margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center;
+        }
+        h2 { color: var(--primary); margin-bottom: 5px; }
+        .subtitle { color: #7f8c8d; margin-bottom: 20px; font-size: 14px;}
+        
+        .control-panel {
+            background: white; padding: 15px 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            margin-bottom: 15px; display: flex; gap: 10px; align-items: center;
+        }
+        button {
+            padding: 8px 15px; font-size: 14px; cursor: pointer; border: none; border-radius: 5px;
+            background: #95a5a6; color: white; transition: 0.3s; font-weight: bold;
+        }
+        button:hover { background: #7f8c8d; }
+        button.primary-btn { background: #3498db; }
+        button.primary-btn:hover { background: #2980b9; }
+
+        .visualization-area {
+            background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            width: 100%; max-width: 800px; display: flex; flex-direction: column; gap: 20px; align-items: center;
+        }
+
+        .tables-container { display: flex; gap: 40px; flex-wrap: wrap; justify-content: center; width: 100%;}
+        
+        .table-wrapper { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+        .table-title { font-weight: bold; color: var(--primary); font-size: 15px; }
+
+        .grid { display: grid; gap: 4px; }
+        .grid-matrix { grid-template-columns: 50px repeat(4, 50px); }
+        .grid-dp { grid-template-columns: 60px repeat(4, 60px); }
+
+        .cell {
+            height: 45px; display: flex; justify-content: center; align-items: center;
+            background: var(--cell-bg); border: 2px solid #bdc3c7; border-radius: 6px;
+            font-size: 16px; font-weight: bold; color: #555; position: relative; transition: all 0.3s ease;
+        }
+        .grid-matrix .cell { width: 50px; }
+        .grid-dp .cell { width: 60px; }
+        
+        .cell.header { background: var(--header-bg); border-color: #95a5a6; color: var(--primary); font-size: 13px; }
+        .cell.empty { border: none; background: transparent; }
+        
+        /* 角标：记录 path[i][j] = k */
+        .badge {
+            position: absolute; top: -8px; right: -8px; background: #e74c3c; color: white;
+            font-size: 10px; padding: 2px 5px; border-radius: 10px; opacity: 0; transition: opacity 0.3s;
+        }
+        .badge.show { opacity: 1; }
+
+        /* 动画与高亮状态 */
+        .cell.active-target { border-color: var(--highlight); box-shadow: 0 0 10px rgba(52, 152, 219, 0.5); transform: scale(1.1); z-index: 10; border-width: 3px;}
+        .cell.source-dp { background: #d5f5e3; border-color: var(--success); color: #27ae60; }
+        .cell.source-matrix { background: #fcf3cf; border-color: var(--warning); color: #d35400; }
+        
+        .cell.updated { background: #ffeaa7; color: #d35400; transform: scale(1.15); z-index: 10; border-color: #f39c12;}
+        .cell.in-path { background: #f5eef8; border-color: var(--path); color: var(--path); transform: scale(1.1); box-shadow: 0 0 15px rgba(142, 68, 173, 0.4); z-index: 10; }
+
+        .narrative-box {
+            background: #f1f2f6; border-left: 5px solid var(--primary); padding: 15px; border-radius: 0 5px 5px 0;
+            font-size: 15px; width: 100%; box-sizing: border-box; min-height: 80px; display: flex; align-items: center; line-height: 1.6;
+        }
+
+        .progress-bar { width: 100%; height: 5px; background: #ecf0f1; border-radius: 5px; overflow: hidden; }
+        .progress-fill { height: 100%; background: var(--highlight); width: 0%; transition: width 0.3s linear; }
+    </style>
+</head>
+<body>
+
+    <h2>资源分配 DP 沙盘 (枚举 k 打擂台)</h2>
+    <div class="subtitle">方程: dp[i][j] = max(dp[i-1][j-k] + a[i][k]) | 记录: path[i][j] = k</div>
+
+    <div class="control-panel">
+        <button onclick="prevStep()" id="prevBtn" disabled>⏮ 上一步</button>
+        <button class="primary-btn" onclick="nextStep()" id="nextBtn">下一步 ⏭</button>
+        <button onclick="togglePlay()" id="playBtn">自动播放 ▶</button>
+        <button onclick="resetSimulation()">重置 ↺</button>
+    </div>
+
+    <div class="visualization-area">
+        <div class="tables-container">
+            <div class="table-wrapper">
+                <div class="table-title">利润矩阵 a[i][k]</div>
+                <div class="grid grid-matrix" id="matrixGrid"></div>
+            </div>
+            
+            <div class="table-wrapper">
+                <div class="table-title">DP 表 dp[i][j]</div>
+                <div class="grid grid-dp" id="dpGrid"></div>
+            </div>
+        </div>
+
+        <div class="narrative-box" id="narrative">点击“下一步”开始推演。首先初始化第 0 行和第 0 列为 0。</div>
+        <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+    </div>
+
+    <script>
+        // 原始数据
+        const N = 3; // 公司数
+        const M = 3; // 设备数
+        // 利润矩阵，增加第0列表示分0台利润为0
+        const a = [
+            [0, 0, 0, 0],
+            [0, 30, 40, 50],
+            [0, 20, 30, 50],
+            [0, 20, 25, 30]
+        ];
+
+        let frames = [];
+        let currentFrameIdx = 0;
+        let playInterval = null;
+
+        function initGrids() {
+            const mGrid = document.getElementById('matrixGrid');
+            const dGrid = document.getElementById('dpGrid');
+            mGrid.innerHTML = ''; dGrid.innerHTML = '';
+            
+            // 渲染利润矩阵
+            for(let r = 0; r <= N; r++) {
+                for(let c = 0; c <= M; c++) {
+                    let cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.id = `mat-${r}-${c}`;
+                    if(r === 0 && c === 0) { cell.classList.add('empty'); }
+                    else if(r === 0) { cell.innerText = `${c}台`; cell.classList.add('header'); }
+                    else if(c === 0) { cell.innerText = `C${r}`; cell.classList.add('header'); }
+                    else { 
+                        cell.innerText = a[r][c]; 
+                        // 为了完整性，把分0台=0也放进去，但在视觉上我们把 c=0 列放在表头后
+                        if(c===0) cell.innerText = '0';
+                    }
+                    mGrid.appendChild(cell);
+                }
+            }
+
+            // 特殊处理矩阵的列头显示（0台，1台，2台，3台）
+            mGrid.innerHTML = '';
+            for(let r = 0; r <= N; r++) {
+                for(let c = -1; c <= M; c++) {
+                    let cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.id = `mat-${r}-${c}`;
+                    if(r === 0 && c === -1) { cell.classList.add('empty'); }
+                    else if(r === 0) { cell.innerText = `${c}台`; cell.classList.add('header'); }
+                    else if(c === -1) { cell.innerText = `C${r}`; cell.classList.add('header'); }
+                    else { cell.innerText = a[r][c]; }
+                    mGrid.appendChild(cell);
+                }
+            }
+
+            // 渲染 DP 表
+            for(let r = 0; r <= N; r++) {
+                for(let c = -1; c <= M; c++) {
+                    let cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.id = `dp-${r}-${c}`;
+                    
+                    let badge = document.createElement('div');
+                    badge.className = 'badge'; badge.id = `badge-${r}-${c}`;
+                    cell.appendChild(badge);
+
+                    let txt = document.createElement('span');
+                    txt.id = `dp-txt-${r}-${c}`;
+                    cell.appendChild(txt);
+
+                    if(r === 0 && c === -1) { cell.classList.add('empty'); }
+                    else if(r === 0) { txt.innerText = `容${c}`; cell.classList.add('header'); }
+                    else if(c === -1) { txt.innerText = `前${r}司`; cell.classList.add('header'); }
+                    else { txt.innerText = ''; }
+
+                    dGrid.appendChild(cell);
+                }
+            }
+        }
+
+        function generateFrames() {
+            frames = [];
+            let dp = Array.from({length: N + 1}, () => Array(M + 1).fill(0));
+            let path = Array.from({length: N + 1}, () => Array(M + 1).fill(0));
+            
+            frames.push({
+                dpState: JSON.parse(JSON.stringify(dp)), pathState: JSON.parse(JSON.stringify(path)),
+                r: -1, c: -1, k: -1, msg: "【初始化】前 0 个公司分配任何设备，或者任何公司分配 0 台设备，利润都是 0。"
+            });
+
+            // 核心填表：i=公司, j=总设备
+            for (let i = 1; i <= N; i++) {
+                for (let j = 1; j <= M; j++) {
+                    
+                    frames.push({
+                        dpState: JSON.parse(JSON.stringify(dp)), pathState: JSON.parse(JSON.stringify(path)),
+                        r: i, c: j, k: -1, phase: 'start-cell',
+                        msg: `【新目标】计算 <b>dp[${i}][${j}]</b>：前 ${i} 个公司分 ${j} 台设备的最大利润。<br>准备枚举给当前第 ${i} 个公司分配几台 (k)。`
+                    });
+
+                    let maxVal = -1;
+                    let bestK = -1;
+
+                    // 枚举给第 i 个公司分 k 台 (k 从 0 到 j)
+                    for (let k = 0; k <= j; k++) {
+                        let curProfit = dp[i - 1][j - k] + a[i][k];
+                        let isNewMax = curProfit > maxVal;
+                        
+                        let msg = `尝试给第 ${i} 个公司分 <b>k = ${k}</b> 台设备：<br>`;
+                        msg += `1. 当前公司赚：a[${i}][${k}] = <b>${a[i][k]}</b><br>`;
+                        msg += `2. 剩下的 ${j-k} 台给前 ${i-1} 个公司赚：dp[${i-1}][${j-k}] = <b>${dp[i-1][j-k]}</b><br>`;
+                        msg += `👉 合计：${a[i][k]} + ${dp[i-1][j-k]} = <b>${curProfit}</b>。 `;
+
+                        if (isNewMax) {
+                            maxVal = curProfit;
+                            bestK = k;
+                            msg += `✅ <b>打破纪录！</b> 暂存最大值。`;
+                        } else {
+                            msg += `❌ 未超过当前最大值(${maxVal})。`;
+                        }
+
+                        // 为了在动画中展示暂存值，我们克隆一个临时状态
+                        let tempDp = JSON.parse(JSON.stringify(dp));
+                        let tempPath = JSON.parse(JSON.stringify(path));
+                        tempDp[i][j] = maxVal; // 显示当前擂主
+                        tempPath[i][j] = bestK;
+
+                        frames.push({
+                            dpState: tempDp, pathState: tempPath,
+                            r: i, c: j, k: k, j_minus_k: j - k, phase: 'eval', isNewMax: isNewMax,
+                            msg: msg
+                        });
+                    }
+
+                    // 结算当前格子
+                    dp[i][j] = maxVal;
+                    path[i][j] = bestK;
+                    frames.push({
+                        dpState: JSON.parse(JSON.stringify(dp)), pathState: JSON.parse(JSON.stringify(path)),
+                        r: i, c: j, k: -1, phase: 'finish-cell',
+                        msg: `🏆 <b>结算 dp[${i}][${j}]</b>：最大利润为 <b>${maxVal}</b>。此时最佳策略是给当前公司分 <b>${bestK}</b> 台。在右上角记录角标！`
+                    });
+                }
+            }
+
+            // 准备回溯
+            frames.push({
+                dpState: JSON.parse(JSON.stringify(dp)), pathState: JSON.parse(JSON.stringify(path)),
+                r: -1, c: -1, k: -1, phase: 'ready-backtrack',
+                msg: `【计算完成】全局最大利润是右下角的 <b>${dp[N][M]}</b>。接下来顺着角标记录开始寻找分配方案。`
+            });
+
+            // 回溯路径
+            let curr_i = N;
+            let curr_rem = M;
+            while(curr_i > 0) {
+                let k = path[curr_i][curr_rem];
+                frames.push({
+                    dpState: JSON.parse(JSON.stringify(dp)), pathState: JSON.parse(JSON.stringify(path)),
+                    phase: 'backtrack', b_i: curr_i, b_rem: curr_rem, b_k: k,
+                    msg: `【回溯】站在 <b>dp[${curr_i}][${curr_rem}]</b>。看角标，得知 <b>第 ${curr_i} 个公司分配了 ${k} 台</b>。<br>剩下的机器变为 ${curr_rem} - ${k} = ${curr_rem - k} 台。去上一行找答案。`
+                });
+                curr_rem -= k;
+                curr_i--;
+            }
+
+            frames.push({
+                dpState: JSON.parse(JSON.stringify(dp)), pathState: JSON.parse(JSON.stringify(path)),
+                phase: 'done',
+                msg: `🎉 <b>寻路完毕！</b> 紫色高亮的格子即为还原出的分配路径。`
+            });
+        }
+
+        function renderFrame(idx) {
+            const frame = frames[idx];
+            
+            // 1. 清理所有高亮状态
+            document.querySelectorAll('.cell').forEach(c => {
+                c.classList.remove('active-target', 'source-dp', 'source-matrix', 'updated', 'in-path');
+            });
+
+            // 2. 更新 DP 表数值与角标
+            for(let r = 0; r <= N; r++) {
+                for(let c = 0; c <= M; c++) {
+                    let txt = document.getElementById(`dp-txt-${r}-${c}`);
+                    let badge = document.getElementById(`badge-${r}-${c}`);
+                    
+                    if (frame.dpState && (frame.dpState[r][c] > 0 || (r===0 || c===0))) {
+                        txt.innerText = frame.dpState[r][c];
+                    } else {
+                        txt.innerText = '';
+                    }
+
+                    // 控制角标显示 (填完之后显示，或者当前正在填的时候)
+                    if (frame.pathState && r > 0 && c > 0 && frame.dpState[r][c] > 0) {
+                         badge.innerText = `k=${frame.pathState[r][c]}`;
+                         badge.classList.add('show');
+                    } else {
+                         badge.classList.remove('show');
+                    }
+                }
+            }
+
+            // 3. 应用当前帧特效
+            if (frame.phase === 'start-cell' || frame.phase === 'eval' || frame.phase === 'finish-cell') {
+                let targetCell = document.getElementById(`dp-${frame.r}-${frame.c}`);
+                targetCell.classList.add('active-target');
+
+                if (frame.phase === 'eval') {
+                    document.getElementById(`mat-${frame.r}-${frame.k}`).classList.add('source-matrix');
+                    document.getElementById(`dp-${frame.r-1}-${frame.j_minus_k}`).classList.add('source-dp');
+                    if(frame.isNewMax) targetCell.classList.add('updated');
+                } else if (frame.phase === 'finish-cell') {
+                    targetCell.classList.add('updated');
+                }
+            }
+
+            // 回溯特效
+            if (frame.phase === 'backtrack' || frame.phase === 'done') {
+                // 根据已回溯的路径高亮
+                let c_i = N;
+                let c_rem = M;
+                while(c_i >= (frame.phase === 'backtrack' ? frame.b_i : 1)) {
+                    document.getElementById(`dp-${c_i}-${c_rem}`).classList.add('in-path');
+                    let k = frames[frames.length-1].pathState[c_i][c_rem];
+                    document.getElementById(`mat-${c_i}-${k}`).classList.add('in-path'); // 矩阵也高亮
+                    c_rem -= k;
+                    c_i--;
+                }
+            }
+
+            // 4. 更新UI
+            document.getElementById('narrative').innerHTML = frame.msg;
+            document.getElementById('progressFill').style.width = ((idx) / (frames.length - 1) * 100) + '%';
+            
+            document.getElementById('prevBtn').disabled = (idx === 0);
+            document.getElementById('nextBtn').disabled = (idx === frames.length - 1);
+            if(idx === frames.length - 1) pausePlay();
+        }
+
+        function nextStep() { if (currentFrameIdx < frames.length - 1) { currentFrameIdx++; renderFrame(currentFrameIdx); } }
+        function prevStep() { if (currentFrameIdx > 0) { currentFrameIdx--; renderFrame(currentFrameIdx); } }
+        
+        function togglePlay() {
+            if (playInterval) { pausePlay(); } 
+            else {
+                if (currentFrameIdx === frames.length - 1) currentFrameIdx = 0;
+                playInterval = setInterval(nextStep, 1000); // 1秒看清打擂台
+                document.getElementById('playBtn').innerText = '暂停 ⏸';
+                document.getElementById('playBtn').classList.add('primary-btn');
+            }
+        }
+        
+        function pausePlay() {
+            clearInterval(playInterval); playInterval = null;
+            document.getElementById('playBtn').innerText = '自动播放 ▶';
+            document.getElementById('playBtn').classList.remove('primary-btn');
+        }
+
+        function resetSimulation() {
+            pausePlay();
+            currentFrameIdx = 0;
+            renderFrame(currentFrameIdx);
+        }
+
+        window.onload = () => {
+            initGrids();
+            generateFrames();
+            renderFrame(0);
+        };
+    </script>
+</body>
+</html>

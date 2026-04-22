@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>城市交通网 DP 寻路沙盘 (10节点分层矩形版)</title>
+    <style>
+        :root {
+            --bg-color: #f4f7f6;
+            --primary: #2c3e50;
+            --accent-edge: #f39c12; /* 正在检查的边 */
+            --path-edge: #8e44ad; /* 最终路线 */
+            --success: #2ecc71;
+            --text: #333;
+        }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: var(--bg-color); color: var(--text); margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        h2 { color: var(--primary); margin-bottom: 5px; }
+        .subtitle { color: #7f8c8d; margin-bottom: 20px; font-size: 14px;}
+        
+        .control-panel { background: white; padding: 15px 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; display: flex; gap: 10px; align-items: center; }
+        button { padding: 8px 15px; font-size: 14px; cursor: pointer; border: none; border-radius: 5px; background: #95a5a6; color: white; transition: 0.3s; }
+        button:hover { background: #7f8c8d; }
+        button.primary-btn { background: #3498db; }
+        button.primary-btn:hover { background: #2980b9; }
+
+        .visualization-area { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); width: 100%; max-width: 950px; display: flex; flex-direction: column; gap: 20px; }
+
+        /* 图论区域 */
+        .graph-container { position: relative; width: 100%; height: 450px; background: #fafbfc; border-radius: 8px; border: 1px solid #ecf0f1; overflow: hidden; }
+        svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        
+        /* 矩形节点样式 */
+        .node { position: absolute; width: 55px; height: 35px; background: white; border: 3px solid #bdc3c7; border-radius: 6px; display: flex; justify-content: center; align-items: center; font-weight: bold; font-size: 15px; transform: translate(-50%, -50%); z-index: 10; transition: all 0.3s; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .node.active { border-color: #3498db; background: #ebf5fb; box-shadow: 0 0 15px rgba(52, 152, 219, 0.5); transform: translate(-50%, -50%) scale(1.15); }
+        .node.updated { border-color: #e74c3c; background: #fadbd8; }
+        .node.in-path { border-color: var(--path-edge); background: #f5eef8; color: var(--path-edge); transform: translate(-50%, -50%) scale(1.15); box-shadow: 0 0 15px rgba(142, 68, 173, 0.4); }
+        
+        /* 表格区域 */
+        .table-container { display: flex; flex-direction: column; gap: 15px; margin-top: 10px; overflow-x: auto;}
+        .data-row { display: flex; align-items: center; gap: 8px; justify-content: flex-start; min-width: max-content; padding-bottom: 5px;}
+        .row-label { width: 70px; font-weight: bold; color: #7f8c8d; text-align: right; margin-right: 10px; font-size: 13px; flex-shrink: 0; }
+        .cell { width: 45px; height: 40px; background: white; border: 2px solid #bdc3c7; border-radius: 5px; display: flex; justify-content: center; align-items: center; font-weight: bold; position: relative; transition: all 0.3s; font-size: 15px;}
+        .cell::after { content: "v" attr(data-i); position: absolute; top: -18px; font-size: 11px; color: #aaa; font-weight: normal; }
+        .cell.updated { background: #ffeaa7; border-color: #f39c12; color: #d35400; transform: scale(1.1); z-index: 5; }
+        .cell.in-path { background: #f5eef8; border-color: var(--path-edge); color: var(--path-edge); transform: scale(1.1); z-index: 5; }
+        
+        .narrative-box { background: #f1f2f6; border-left: 5px solid var(--primary); padding: 15px; border-radius: 0 5px 5px 0; font-size: 15px; min-height: 70px; display: flex; align-items: center; line-height: 1.5; }
+        .progress-bar { width: 100%; height: 5px; background: #ecf0f1; border-radius: 5px; overflow: hidden; }
+        .progress-fill { height: 100%; background: var(--success); width: 0%; transition: width 0.3s linear; }
+    </style>
+</head>
+<body>
+
+    <h2>城市交通网 最短费用路径推演 (10节点矩阵版)</h2>
+    <div class="subtitle">方程: dp[i] = min(dp[j] + weight(j,i)) | 回溯: pre[i] = j</div>
+
+    <div class="control-panel">
+        <button onclick="prevStep()" id="prevBtn" disabled>⏮ 上一步</button>
+        <button class="primary-btn" onclick="nextStep()" id="nextBtn">下一步 ⏭</button>
+        <button onclick="togglePlay()" id="playBtn">自动播放 ▶</button>
+    </div>
+
+    <div class="visualization-area">
+        <div class="graph-container" id="graph">
+            <svg id="edgesSvg">
+                <defs>
+                    <marker id="arrow-normal" viewBox="0 0 10 10" refX="24" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+                        <path d="M 0 0 L 10 5 L 0 10 z" fill="#bdc3c7" />
+                    </marker>
+                    <marker id="arrow-active" viewBox="0 0 10 10" refX="24" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+                        <path d="M 0 0 L 10 5 L 0 10 z" fill="#f39c12" />
+                    </marker>
+                    <marker id="arrow-path" viewBox="0 0 10 10" refX="24" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+                        <path d="M 0 0 L 10 5 L 0 10 z" fill="#8e44ad" />
+                    </marker>
+                </defs>
+            </svg>
+            </div>
+
+        <div class="table-container">
+            <div class="data-row" id="dpRow"><div class="row-label">最小费用<br>dp[i]</div></div>
+            <div class="data-row" id="preRow"><div class="row-label">前驱节点<br>pre[i]</div></div>
+        </div>
+
+        <div class="narrative-box" id="narrative">点击“下一步”或“自动播放”开始寻找 v1 到 v10 的最省费用。</div>
+        <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+    </div>
+
+    <script>
+        // 矩形分层布局坐标 (5层结构)
+        const nodes = [
+            { id: 1, x: 10, y: 50 },
+            { id: 2, x: 30, y: 20 }, { id: 3, x: 30, y: 50 }, { id: 4, x: 30, y: 80 },
+            { id: 5, x: 50, y: 20 }, { id: 6, x: 50, y: 50 }, { id: 7, x: 50, y: 80 },
+            { id: 8, x: 70, y: 35 }, { id: 9, x: 70, y: 65 },
+            { id: 10, x: 90, y: 50 }
+        ];
+
+        // 题目的邻接矩阵数据转换为边列表
+        const edges = [
+            { u: 1, v: 2, w: 2 }, { u: 1, v: 3, w: 5 }, { u: 1, v: 4, w: 1 },
+            { u: 2, v: 5, w: 12 }, { u: 2, v: 6, w: 14 },
+            { u: 3, v: 5, w: 6 }, { u: 3, v: 6, w: 10 }, { u: 3, v: 7, w: 4 },
+            { u: 4, v: 5, w: 13 }, { u: 4, v: 6, w: 12 }, { u: 4, v: 7, w: 11 },
+            { u: 5, v: 8, w: 3 }, { u: 5, v: 9, w: 9 },
+            { u: 6, v: 8, w: 6 }, { u: 6, v: 9, w: 5 },
+            { u: 7, v: 9, w: 10 },
+            { u: 8, v: 10, w: 5 },
+            { u: 9, v: 10, w: 2 }
+        ];
+
+        let frames = [];
+        let currentFrameIdx = 0;
+        let playInterval = null;
+
+        function generateFrames() {
+            frames = [];
+            let dp = new Array(11).fill(Infinity); // 1-indexed, size 11
+            let pre = new Array(11).fill(-1);
+            dp[1] = 0;
+            
+            frames.push({
+                dp: [...dp], pre: [...pre], activeNode: 1, activeEdge: null,
+                msg: "【阶段 1】初始化起点 v1，费用 dp[1] = 0。其余城市费用设为无穷大(∞)。"
+            });
+
+            // 动态规划计算阶段
+            for (let i = 2; i <= 10; i++) {
+                frames.push({
+                    dp: [...dp], pre: [...pre], activeNode: i, activeEdge: null,
+                    msg: `【新阶段考察】现在开始寻找通往城市 <b>v${i}</b> 的最小费用路径。`
+                });
+
+                let incomingEdges = edges.filter(e => e.v === i);
+                
+                for (let edge of incomingEdges) {
+                    let j = edge.u;
+                    let w = edge.w;
+                    let msg = `考察前驱路线：v${j} ➔ v${i} (路段费用: ${w})。<br>`;
+                    let isUpdated = false;
+
+                    if (dp[j] !== Infinity) {
+                        let newCost = dp[j] + w;
+                        msg += `此路线总费用: dp[${j}] + ${w} = ${dp[j]} + ${w} = <b>${newCost}</b>。<br>`;
+                        
+                        if (newCost < dp[i]) {
+                            msg += `✅ <b>找到更优解！</b> (原记录: ${dp[i] === Infinity ? '∞' : dp[i]})<br>更新 dp[${i}]=${newCost}，并记录前驱 pre[${i}]=${j}。`;
+                            dp[i] = newCost;
+                            pre[i] = j;
+                            isUpdated = true;
+                        } else {
+                            msg += `❌ 此路线总费用(${newCost}) 未优于现有最优解(${dp[i]})，保持原样。`;
+                        }
+                    }
+
+                    frames.push({
+                        dp: [...dp], pre: [...pre], activeNode: i, 
+                        activeEdge: edge, updatedNode: isUpdated ? i : null,
+                        msg: msg
+                    });
+                }
+            }
+
+            // 准备回溯
+            frames.push({
+                dp: [...dp], pre: [...pre], activeNode: 10, phase: 'finish',
+                msg: `【核心计算完毕】到达终点 v10 的最省费用为 <b>${dp[10]}</b>！(与样例输出一致)<br>接下来顺着 pre 数组回溯找路径。`
+            });
+
+            // 回溯阶段
+            let curr = 10;
+            let pathEdges = [];
+            let pathNodes = [10];
+            while (pre[curr] !== -1 && curr !== 1) {
+                let p = pre[curr];
+                pathNodes.push(p);
+                let e = edges.find(ed => ed.u === p && ed.v === curr);
+                if(e) pathEdges.push(e);
+                
+                frames.push({
+                    dp: [...dp], pre: [...pre], phase: 'backtrack',
+                    currNode: curr, prevNode: p, pathEdges: [...pathEdges], pathNodes: [...pathNodes],
+                    msg: `【回溯路线】当前在 v${curr}。查看表格 pre[${curr}] = ${p}。<br>这意味着到达 v${curr} 最省钱的上一步是 <b>v${p}</b>。`
+                });
+                curr = p;
+            }
+            
+            frames.push({
+                dp: [...dp], pre: [...pre], phase: 'backtrack', pathEdges: [...pathEdges], pathNodes: [...pathNodes],
+                msg: `【寻路大功告成】已回溯至起点 v1。最终的最短路径(紫色连线)为：<br><b>${pathNodes.reverse().join(' ➔ ')}</b>`
+            });
+        }
+
+        function drawGraph(frame) {
+            const graph = document.getElementById('graph');
+            const svg = document.getElementById('edgesSvg');
+            
+            svg.innerHTML = svg.querySelector('defs').outerHTML;
+            document.querySelectorAll('.node, .edge-label').forEach(e => e.remove());
+
+            // 绘制连线和权重
+            edges.forEach(edge => {
+                let line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                let n1 = nodes.find(n => n.id === edge.u);
+                let n2 = nodes.find(n => n.id === edge.v);
+                
+                let x1 = n1.x + '%', y1 = n1.y + '%';
+                let x2 = n2.x + '%', y2 = n2.y + '%';
+                
+                line.setAttribute('x1', x1); line.setAttribute('y1', y1);
+                line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+                line.setAttribute('stroke', '#bdc3c7');
+                line.setAttribute('stroke-width', '2');
+                line.setAttribute('marker-end', 'url(#arrow-normal)');
+
+                if (frame.activeEdge && frame.activeEdge.u === edge.u && frame.activeEdge.v === edge.v) {
+                    line.setAttribute('stroke', 'var(--accent-edge)');
+                    line.setAttribute('stroke-width', '4');
+                    line.setAttribute('marker-end', 'url(#arrow-active)');
+                } else if (frame.phase === 'backtrack' && frame.pathEdges.find(e => e.u === edge.u && e.v === edge.v)) {
+                    line.setAttribute('stroke', 'var(--path-edge)');
+                    line.setAttribute('stroke-width', '4');
+                    line.setAttribute('marker-end', 'url(#arrow-path)');
+                }
+
+                svg.appendChild(line);
+
+                // 权重标签 (做偏移防止遮挡线)
+                let label = document.createElement('div');
+                label.className = 'edge-label';
+                label.style.position = 'absolute';
+                // 让权重更靠近起始点，避免多条线在中间交汇时文字重叠
+                label.style.left = (n1.x * 0.4 + n2.x * 0.6) + '%';
+                label.style.top = (n1.y * 0.4 + n2.y * 0.6) + '%';
+                label.style.transform = 'translate(-50%, -50%)';
+                label.style.background = 'rgba(255,255,255,0.85)';
+                label.style.padding = '1px 4px';
+                label.style.borderRadius = '3px';
+                label.style.fontSize = '12px';
+                label.style.color = '#7f8c8d';
+                label.innerText = edge.w;
+                
+                 if (frame.activeEdge && frame.activeEdge.u === edge.u && frame.activeEdge.v === edge.v) {
+                     label.style.color = '#d35400'; label.style.fontWeight = 'bold'; label.style.zIndex = '5'; label.style.background = '#ffeaa7';
+                 }
+                graph.appendChild(label);
+            });
+
+            // 绘制节点
+            nodes.forEach(n => {
+                let div = document.createElement('div');
+                div.className = 'node';
+                div.style.left = n.x + '%';
+                div.style.top = n.y + '%';
+                div.innerText = 'v' + n.id;
+
+                if (frame.activeNode === n.id) div.classList.add('active');
+                if (frame.updatedNode === n.id) div.classList.add('updated');
+                if (frame.phase === 'backtrack' && frame.pathNodes.includes(n.id)) div.classList.add('in-path');
+                
+                graph.appendChild(div);
+            });
+        }
+
+        function drawTables(frame) {
+            const dpRow = document.getElementById('dpRow');
+            const preRow = document.getElementById('preRow');
+            
+            document.querySelectorAll('.cell').forEach(e => e.remove());
+
+            for (let i = 1; i <= 10; i++) {
+                let dBox = document.createElement('div');
+                dBox.className = 'cell'; dBox.setAttribute('data-i', i);
+                let val = frame.dp[i];
+                dBox.innerText = val === Infinity ? '∞' : val;
+                
+                let pBox = document.createElement('div');
+                pBox.className = 'cell'; pBox.setAttribute('data-i', i);
+                pBox.innerText = frame.pre[i] === -1 ? '-' : frame.pre[i];
+
+                if (frame.updatedNode === i) { dBox.classList.add('updated'); pBox.classList.add('updated'); }
+                if (frame.phase === 'backtrack' && frame.pathNodes.includes(i)) {
+                    dBox.classList.add('in-path'); pBox.classList.add('in-path');
+                }
+
+                dpRow.appendChild(dBox);
+                preRow.appendChild(pBox);
+            }
+        }
+
+        function renderFrame(idx) {
+            const frame = frames[idx];
+            drawGraph(frame);
+            drawTables(frame);
+            
+            document.getElementById('narrative').innerHTML = frame.msg;
+            document.getElementById('progressFill').style.width = ((idx + 1) / frames.length * 100) + '%';
+            document.getElementById('prevBtn').disabled = (idx === 0);
+            document.getElementById('nextBtn').disabled = (idx === frames.length - 1);
+            if(idx === frames.length - 1) pausePlay();
+        }
+
+        function nextStep() { if (currentFrameIdx < frames.length - 1) { currentFrameIdx++; renderFrame(currentFrameIdx); } }
+        function prevStep() { if (currentFrameIdx > 0) { currentFrameIdx--; renderFrame(currentFrameIdx); } }
+        function togglePlay() {
+            if (playInterval) { pausePlay(); } 
+            else {
+                if (currentFrameIdx === frames.length - 1) currentFrameIdx = 0;
+                playInterval = setInterval(nextStep, 1000); // 1秒帧率
+                document.getElementById('playBtn').innerText = '暂停 ⏸';
+                document.getElementById('playBtn').classList.add('primary-btn');
+            }
+        }
+        function pausePlay() {
+            clearInterval(playInterval); playInterval = null;
+            document.getElementById('playBtn').innerText = '自动播放 ▶';
+            document.getElementById('playBtn').classList.remove('primary-btn');
+        }
+
+        window.onload = () => {
+            generateFrames();
+            renderFrame(0);
+        };
+    </script>
+</body>
+</html>

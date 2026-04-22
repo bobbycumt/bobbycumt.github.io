@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>最长公共子序列 (LCS) 填表沙盘</title>
+    <style>
+        :root {
+            --bg-color: #f4f7f6;
+            --primary: #2c3e50;
+            --success: #2ecc71; /* 匹配时的绿色 */
+            --warning: #f39c12; /* 不匹配时的橙色 */
+            --highlight: #3498db; /* 当前行列高亮 */
+            --text: #333;
+            --cell-bg: #fff;
+            --header-bg: #ecf0f1;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, sans-serif; background: var(--bg-color); color: var(--text);
+            margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center;
+        }
+        h2 { color: var(--primary); margin-bottom: 5px; }
+        .subtitle { color: #7f8c8d; margin-bottom: 20px; font-size: 15px;}
+        
+        .control-panel {
+            background: white; padding: 15px 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            margin-bottom: 20px; display: flex; gap: 10px; align-items: center;
+        }
+        button {
+            padding: 8px 15px; font-size: 14px; cursor: pointer; border: none; border-radius: 5px;
+            background: #95a5a6; color: white; transition: 0.3s; font-weight: bold;
+        }
+        button:hover { background: #7f8c8d; }
+        button.primary-btn { background: #3498db; }
+        button.primary-btn:hover { background: #2980b9; }
+
+        .visualization-area {
+            background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            width: 100%; max-width: 750px; display: flex; flex-direction: column; gap: 20px; align-items: center;
+        }
+
+        /* 核心表格网格布局 */
+        .dp-grid {
+            display: grid;
+            /* 列数：空角 + Y头 + X字符数 (1+1+7=9列) */
+            grid-template-columns: repeat(9, 45px);
+            gap: 4px;
+        }
+
+        .cell {
+            width: 45px; height: 45px; display: flex; justify-content: center; align-items: center;
+            background: var(--cell-bg); border: 2px solid #bdc3c7; border-radius: 6px;
+            font-size: 18px; font-weight: bold; color: #aaa; transition: all 0.3s ease;
+        }
+        
+        /* 表头样式 */
+        .cell.header { background: var(--header-bg); border-color: #95a5a6; color: var(--primary); }
+        .cell.empty { border: none; background: transparent; }
+        
+        /* 已填写的数字 */
+        .cell.filled { color: var(--primary); }
+
+        /* 动画与高亮状态 */
+        .cell.active-header { background: var(--highlight); color: white; border-color: #2980b9; transform: scale(1.1); z-index: 10;}
+        
+        /* 匹配 (相等) 时的样式 */
+        .cell.match-source { background: #d5f5e3; border-color: var(--success); color: #27ae60; }
+        .cell.match-target { background: var(--success); border-color: #27ae60; color: white; transform: scale(1.15); box-shadow: 0 0 15px rgba(46, 204, 113, 0.4); z-index: 10;}
+        
+        /* 不匹配 (不等) 时的样式 */
+        .cell.mismatch-source { background: #fcf3cf; border-color: var(--warning); color: #d35400; }
+        .cell.mismatch-target { background: var(--warning); border-color: #d35400; color: white; transform: scale(1.15); box-shadow: 0 0 15px rgba(243, 156, 18, 0.4); z-index: 10;}
+        
+        /* 最终答案 */
+        .cell.final-answer { background: #8e44ad; border-color: #732d91; color: white; transform: scale(1.2); box-shadow: 0 0 20px rgba(142, 68, 173, 0.5); z-index: 10; animation: pulse 1.5s infinite;}
+
+        @keyframes pulse { 0% { transform: scale(1.1); } 50% { transform: scale(1.2); } 100% { transform: scale(1.1); } }
+
+        .narrative-box {
+            background: #f1f2f6; border-left: 5px solid var(--primary); padding: 15px; border-radius: 0 5px 5px 0;
+            font-size: 16px; width: 100%; box-sizing: border-box; min-height: 80px; display: flex; align-items: center; line-height: 1.5;
+        }
+
+        .progress-bar { width: 100%; height: 5px; background: #ecf0f1; border-radius: 5px; overflow: hidden; }
+        .progress-fill { height: 100%; background: var(--highlight); width: 0%; transition: width 0.3s linear; }
+    </style>
+</head>
+<body>
+
+    <h2>最长公共子序列 (LCS) 填表沙盘</h2>
+    <div class="subtitle">相等: dp[i][j] = dp[i-1][j-1] + 1 | 不等: dp[i][j] = max(上方, 左方)</div>
+
+    <div class="control-panel">
+        <button onclick="prevStep()" id="prevBtn" disabled>⏮ 上一步</button>
+        <button class="primary-btn" onclick="nextStep()" id="nextBtn">下一步 ⏭</button>
+        <button onclick="togglePlay()" id="playBtn">自动播放 ▶</button>
+        <button onclick="resetSimulation()">重置 ↺</button>
+    </div>
+
+    <div class="visualization-area">
+        <div class="dp-grid" id="grid">
+            </div>
+
+        <div class="narrative-box" id="narrative">
+            点击“下一步”开始推演。首先初始化第 0 行和第 0 列为 0，因为空字符串的 LCS 是 0。
+        </div>
+        <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+    </div>
+
+    <script>
+        const X = "ABCBDAB";
+        const Y = "BDCABA";
+        const cols = X.length + 2; // +2 因为有表头和第0列
+        const rows = Y.length + 2; // +2 因为有表头和第0行
+
+        let frames = [];
+        let currentFrameIdx = 0;
+        let playInterval = null;
+
+        // 初始化构建网格 DOM
+        function initGrid() {
+            const grid = document.getElementById('grid');
+            grid.innerHTML = '';
+            
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    let cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.id = `cell-${r}-${c}`;
+                    
+                    // 填表头字符
+                    if (r === 0 && c > 1) {
+                        cell.innerText = X[c-2];
+                        cell.classList.add('header');
+                    } else if (c === 0 && r > 1) {
+                        cell.innerText = Y[r-2];
+                        cell.classList.add('header');
+                    } else if (r === 0 && c <= 1 || c === 0 && r <= 1) {
+                        cell.classList.add('empty');
+                    } else if (r === 1 || c === 1) {
+                        // 初始化第0行和第0列的 0
+                        cell.innerText = '0';
+                        cell.classList.add('filled');
+                    } else {
+                        // 待填写的 dp 格子
+                        cell.innerText = '';
+                    }
+                    grid.appendChild(cell);
+                }
+            }
+        }
+
+        // 预先生成所有的动画帧
+        function generateFrames() {
+            frames = [];
+            let dp = Array.from({length: Y.length + 1}, () => Array(X.length + 1).fill(0));
+            
+            // 初始帧
+            frames.push({
+                dpState: JSON.parse(JSON.stringify(dp)), r: -1, c: -1,
+                msg: "【初始化】将表格的第 0 行和第 0 列填满 0。<br>这代表：如果其中一个字符串是空串，公共子序列长度只能为 0。"
+            });
+
+            // 核心填表推演
+            for (let i = 1; i <= Y.length; i++) {
+                for (let j = 1; j <= X.length; j++) {
+                    let isMatch = (Y[i-1] === X[j-1]);
+                    let msg = `考察 Y 的字符 <b>'${Y[i-1]}'</b> 和 X 的字符 <b>'${X[j-1]}'</b>。<br>`;
+                    
+                    if (isMatch) {
+                        dp[i][j] = dp[i-1][j-1] + 1;
+                        msg += `✅ <b>字符相同！</b><br>直接拿左上角的值加一： dp[${i-1}][${j-1}] + 1 = <b>${dp[i][j]}</b>。`;
+                    } else {
+                        dp[i][j] = Math.max(dp[i-1][j], dp[i][j-1]);
+                        msg += `❌ <b>字符不同。</b><br>取上方格子(${dp[i-1][j]})和左方格子(${dp[i][j-1]})的最大值，结果为 <b>${dp[i][j]}</b>。`;
+                    }
+
+                    frames.push({
+                        dpState: JSON.parse(JSON.stringify(dp)), 
+                        r: i, c: j, isMatch: isMatch,
+                        msg: msg
+                    });
+                }
+            }
+
+            // 结束帧
+            frames.push({
+                dpState: JSON.parse(JSON.stringify(dp)), r: -1, c: -1, isDone: true,
+                msg: `【计算完成】表格填满！右下角的数字 <b>${dp[Y.length][X.length]}</b> 就是整个字符串的最长公共子序列长度！`
+            });
+        }
+
+        function renderFrame(idx) {
+            const frame = frames[idx];
+            
+            // 1. 重置所有动态类名
+            document.querySelectorAll('.cell').forEach(cell => {
+                cell.classList.remove('active-header', 'match-target', 'match-source', 'mismatch-target', 'mismatch-source', 'final-answer');
+                // 确保已经填过的格子显示数值
+                let r = parseInt(cell.id.split('-')[1]);
+                let c = parseInt(cell.id.split('-')[2]);
+                if (r > 1 && c > 1 && r - 1 <= Y.length && c - 1 <= X.length) {
+                    if (frame.dpState[r-1][c-1] !== 0 || (idx > 0)) {
+                        // 根据当前进行到的步骤决定是否显示数字
+                        if( (r-1 < frame.r) || (r-1 === frame.r && c-1 <= frame.c) || frame.isDone ) {
+                            cell.innerText = frame.dpState[r-1][c-1];
+                            cell.classList.add('filled');
+                        } else {
+                            cell.innerText = '';
+                            cell.classList.remove('filled');
+                        }
+                    }
+                }
+            });
+
+            // 2. 根据状态施加高亮特效
+            if (frame.r !== -1 && frame.c !== -1) {
+                let targetRow = frame.r + 1;
+                let targetCol = frame.c + 1;
+                let targetCell = document.getElementById(`cell-${targetRow}-${targetCol}`);
+                
+                // 高亮表头字符
+                document.getElementById(`cell-${targetRow}-0`).classList.add('active-header');
+                document.getElementById(`cell-0-${targetCol}`).classList.add('active-header');
+
+                if (frame.isMatch) {
+                    // 相等：高亮左上角
+                    document.getElementById(`cell-${targetRow-1}-${targetCol-1}`).classList.add('match-source');
+                    targetCell.classList.add('match-target');
+                } else {
+                    // 不等：高亮上方和左方
+                    document.getElementById(`cell-${targetRow-1}-${targetCol}`).classList.add('mismatch-source');
+                    document.getElementById(`cell-${targetRow}-${targetCol-1}`).classList.add('mismatch-source');
+                    targetCell.classList.add('mismatch-target');
+                }
+            }
+
+            if (frame.isDone) {
+                document.getElementById(`cell-${rows-1}-${cols-1}`).classList.add('final-answer');
+            }
+
+            // 更新 UI
+            document.getElementById('narrative').innerHTML = frame.msg;
+            document.getElementById('progressFill').style.width = ((idx) / (frames.length - 1) * 100) + '%';
+            
+            document.getElementById('prevBtn').disabled = (idx === 0);
+            document.getElementById('nextBtn').disabled = (idx === frames.length - 1);
+            if(idx === frames.length - 1) pausePlay();
+        }
+
+        function nextStep() { if (currentFrameIdx < frames.length - 1) { currentFrameIdx++; renderFrame(currentFrameIdx); } }
+        function prevStep() { if (currentFrameIdx > 0) { currentFrameIdx--; renderFrame(currentFrameIdx); } }
+        
+        function togglePlay() {
+            if (playInterval) { pausePlay(); } 
+            else {
+                if (currentFrameIdx === frames.length - 1) currentFrameIdx = 0;
+                playInterval = setInterval(nextStep, 600); // 速度较快，0.6秒一格，展示填表快感
+                document.getElementById('playBtn').innerText = '暂停 ⏸';
+                document.getElementById('playBtn').classList.add('primary-btn');
+            }
+        }
+        
+        function pausePlay() {
+            clearInterval(playInterval); playInterval = null;
+            document.getElementById('playBtn').innerText = '自动播放 ▶';
+            document.getElementById('playBtn').classList.remove('primary-btn');
+        }
+
+        function resetSimulation() {
+            pausePlay();
+            currentFrameIdx = 0;
+            renderFrame(currentFrameIdx);
+        }
+
+        // 启动！
+        window.onload = () => {
+            initGrid();
+            generateFrames();
+            renderFrame(0);
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>容斥原理：操场扫地演示</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f7f6;
+            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        /* 核心约束：容器最大宽度不超过 790px */
+        .container {
+            background: white;
+            max-width: 790px;
+            width: 100%;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            box-sizing: border-box;
+        }
+
+        h2 {
+            margin-top: 0;
+            text-align: center;
+            color: #2c3e50;
+        }
+
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .controls label {
+            display: flex;
+            align-items: center;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .controls input[type=range] {
+            margin: 0 10px;
+            cursor: pointer;
+        }
+
+        .controls button {
+            padding: 6px 12px;
+            background-color: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        
+        .controls button:hover { background-color: #c0392b; }
+
+        /* 图例 */
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 15px;
+            font-size: 13px;
+        }
+        .legend-item { display: flex; align-items: center; gap: 5px; }
+        .color-box { width: 16px; height: 16px; border: 1px solid #ccc; border-radius: 3px; }
+        .bg-row { background-color: #bbdefb; } /* 男生：蓝色 */
+        .bg-col { background-color: #ffcdd2; } /* 女生：粉色 */
+        .bg-both { background-color: #ce93d8; } /* 重叠：紫色 */
+
+        /* 网格容器，防止超宽 */
+        .grid-wrapper {
+            width: 100%;
+            overflow-x: auto; /* 网格过大时允许横向滚动，保护页面宽度不被撑破 */
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
+            padding: 10px 0;
+        }
+
+        .grid {
+            display: grid;
+            gap: 2px;
+        }
+
+        .cell {
+            width: 35px;
+            height: 35px;
+            border: 1px solid #e0e0e0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            color: #666;
+            transition: background-color 0.2s;
+        }
+
+        /* 交互按钮 */
+        .btn-toggle {
+            width: 35px;
+            height: 35px;
+            border: 1px solid #999;
+            background-color: #f1f2f6;
+            cursor: pointer;
+            border-radius: 4px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        
+        .btn-row.active { background-color: #2980b9; color: white; border-color: #2980b9; }
+        .btn-col.active { background-color: #c0392b; color: white; border-color: #c0392b; }
+
+        .corner { visibility: hidden; }
+
+        /* 底部公式框 */
+        .formula-box {
+            background-color: #e8f4fd;
+            border-left: 5px solid #3498db;
+            padding: 15px;
+            border-radius: 4px;
+            text-align: center;
+            font-size: 16px;
+            line-height: 1.6;
+        }
+        
+        .formula-box .highlight {
+            font-size: 24px;
+            font-weight: bold;
+            color: #e74c3c;
+        }
+        .math { font-family: monospace; font-size: 18px; color: #2c3e50; font-weight: bold;}
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>扫地面积演示 (容斥原理)</h2>
+    
+    <div class="controls">
+        <label>
+            行数 N: 
+            <input type="range" id="nSlider" min="2" max="12" value="4">
+            <span id="nVal">4</span>
+        </label>
+        <label>
+            列数 M: 
+            <input type="range" id="mSlider" min="2" max="15" value="5">
+            <span id="mVal">5</span>
+        </label>
+        <button id="btnReset">清空打扫</button>
+    </div>
+
+    <div class="legend">
+        <div class="legend-item"><div class="color-box bg-row"></div>男生扫行</div>
+        <div class="legend-item"><div class="color-box bg-col"></div>女生扫列</div>
+        <div class="legend-item"><div class="color-box bg-both"></div>重复区域(需减去)</div>
+    </div>
+
+    <div class="grid-wrapper">
+        <div class="grid" id="gridContainer">
+            </div>
+    </div>
+
+    <div class="formula-box" id="formulaBox">
+        </div>
+</div>
+
+<script>
+    // 状态数据
+    let N = 4; // 行数
+    let M = 5; // 列数
+    let activeRows = new Set(); // 记录男生打扫的行
+    let activeCols = new Set(); // 记录女生打扫的列
+
+    // DOM 元素
+    const nSlider = document.getElementById('nSlider');
+    const mSlider = document.getElementById('mSlider');
+    const nVal = document.getElementById('nVal');
+    const mVal = document.getElementById('mVal');
+    const btnReset = document.getElementById('btnReset');
+    const gridContainer = document.getElementById('gridContainer');
+    const formulaBox = document.getElementById('formulaBox');
+
+    // 渲染网格
+    function renderGrid() {
+        gridContainer.innerHTML = '';
+        // 设置 CSS Grid 列数：1 列按钮 + M 列格子
+        gridContainer.style.gridTemplateColumns = `auto repeat(${M}, 35px)`;
+
+        // 第一行：左上角空白 + 女生控制按钮 (列)
+        const corner = document.createElement('div');
+        corner.className = 'corner';
+        gridContainer.appendChild(corner);
+
+        for (let c = 1; c <= M; c++) {
+            const btn = document.createElement('div');
+            btn.className = `btn-toggle btn-col ${activeCols.has(c) ? 'active' : ''}`;
+            btn.innerText = `列${c}`;
+            btn.title = "点击切换女生打扫状态";
+            btn.onclick = () => {
+                if (activeCols.has(c)) activeCols.delete(c);
+                else activeCols.add(c);
+                updateVisuals();
+            };
+            gridContainer.appendChild(btn);
+        }
+
+        // 接下来的 N 行：男生控制按钮 (行) + 格子
+        for (let r = 1; r <= N; r++) {
+            // 行按钮
+            const rowBtn = document.createElement('div');
+            rowBtn.className = `btn-toggle btn-row ${activeRows.has(r) ? 'active' : ''}`;
+            rowBtn.innerText = `行${r}`;
+            rowBtn.title = "点击切换男生打扫状态";
+            rowBtn.onclick = () => {
+                if (activeRows.has(r)) activeRows.delete(r);
+                else activeRows.add(r);
+                updateVisuals();
+            };
+            gridContainer.appendChild(rowBtn);
+
+            // 绘制 M 个格子
+            for (let c = 1; c <= M; c++) {
+                const cell = document.createElement('div');
+                cell.className = 'cell';
+                cell.id = `cell-${r}-${c}`;
+                gridContainer.appendChild(cell);
+            }
+        }
+        updateVisuals();
+    }
+
+    // 更新界面颜色和公式
+    function updateVisuals() {
+        // 更新按钮外观
+        document.querySelectorAll('.btn-row').forEach((btn, index) => {
+            btn.className = `btn-toggle btn-row ${activeRows.has(index + 1) ? 'active' : ''}`;
+        });
+        document.querySelectorAll('.btn-col').forEach((btn, index) => {
+            btn.className = `btn-toggle btn-col ${activeCols.has(index + 1) ? 'active' : ''}`;
+        });
+
+        // 更新格子颜色
+        for (let r = 1; r <= N; r++) {
+            for (let c = 1; c <= M; c++) {
+                const cell = document.getElementById(`cell-${r}-${c}`);
+                const isRowSwept = activeRows.has(r);
+                const isColSwept = activeCols.has(c);
+
+                if (isRowSwept && isColSwept) {
+                    cell.className = 'cell bg-both';
+                } else if (isRowSwept) {
+                    cell.className = 'cell bg-row';
+                } else if (isColSwept) {
+                    cell.className = 'cell bg-col';
+                } else {
+                    cell.className = 'cell';
+                }
+            }
+        }
+
+        // 更新容斥原理公式计算
+        const R = activeRows.size;
+        const C = activeCols.size;
+        const totalArea = (R * M) + (C * N) - (R * C);
+
+        formulaBox.innerHTML = `
+            <div>男生打扫了 <span class="math">${R}</span> 行，女生打扫了 <span class="math">${C}</span> 列。</div>
+            <div style="margin-top: 10px; font-size: 15px;">
+                总面积 = <span class="bg-row" style="padding:2px 5px">行面积(${R} × ${M})</span> 
+                + <span class="bg-col" style="padding:2px 5px">列面积(${C} × ${N})</span> 
+                - <span class="bg-both" style="padding:2px 5px; color:white">重叠面积(${R} × ${C})</span>
+            </div>
+            <div style="margin-top: 15px;">
+                = <span class="math">${R * M}</span> + <span class="math">${C * N}</span> - <span class="math">${R * C}</span> 
+                = <span class="highlight">${totalArea}</span>
+            </div>
+        `;
+    }
+
+    // 事件监听
+    nSlider.addEventListener('input', (e) => {
+        N = parseInt(e.target.value);
+        nVal.innerText = N;
+        // 移除超出范围的缓存状态
+        activeRows = new Set([...activeRows].filter(r => r <= N));
+        renderGrid();
+    });
+
+    mSlider.addEventListener('input', (e) => {
+        M = parseInt(e.target.value);
+        mVal.innerText = M;
+        // 移除超出范围的缓存状态
+        activeCols = new Set([...activeCols].filter(c => c <= M));
+        renderGrid();
+    });
+
+    btnReset.addEventListener('click', () => {
+        activeRows.clear();
+        activeCols.clear();
+        renderGrid();
+    });
+
+    // 初始设置样例中的状态 (男生打扫1,2,4行；女生打扫3,4,5列)
+    activeRows.add(1).add(2).add(4);
+    activeCols.add(3).add(4).add(5);
+    renderGrid();
+
+</script>
+</body>
+</html>

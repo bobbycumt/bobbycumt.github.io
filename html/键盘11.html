@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>查表匹配法 (单步模式) - 键盘打字模拟</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f7f6;
+            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .container {
+            background: white;
+            max-width: 790px;
+            width: 100%;
+            padding: 20px 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            box-sizing: border-box;
+        }
+
+        h2 { margin-top: 0; color: #2c3e50; text-align: center; border-bottom: 2px solid #eee; padding-bottom: 10px; font-size: 22px; }
+
+        /* 控制区 */
+        .controls { display: flex; justify-content: center; align-items: center; gap: 10px; margin-bottom: 15px; }
+        input[type="text"] { padding: 8px 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 4px; width: 220px; text-transform: uppercase; font-family: monospace; }
+        button { padding: 8px 15px; border: none; border-radius: 4px; font-size: 15px; cursor: pointer; font-weight: bold; transition: all 0.2s; }
+        .btn-step { background-color: #e67e22; color: white; }
+        .btn-step:hover { background-color: #d35400; }
+        .btn-play { background-color: #3498db; color: white; }
+        .btn-play:hover { background-color: #2980b9; }
+        .btn-reset { background-color: #95a5a6; color: white; }
+        button:disabled { background-color: #bdc3c7; cursor: not-allowed; transform: none; }
+
+        /* 字符串显示区 */
+        .string-display { text-align: center; font-size: 20px; font-family: monospace; font-weight: bold; margin-bottom: 15px; letter-spacing: 3px; background: #f8f9fa; padding: 10px; border-radius: 6px;}
+        .char-normal { color: #7f8c8d; }
+        .char-active { color: #e74c3c; transform: scale(1.4); display: inline-block; transition: all 0.2s; }
+        .char-done { color: #2c3e50; }
+
+        /* 键盘区 */
+        .keyboard { display: flex; flex-direction: column; gap: 5px; align-items: center; margin-bottom: 20px; background: #eef2f5; padding: 15px; border-radius: 8px; border: 1px dashed #bdc3c7; }
+        .kb-row { display: flex; gap: 5px; }
+        .kb-row:nth-child(2) { margin-left: 20px; }
+        .kb-row:nth-child(3) { margin-left: 40px; }
+        .kb-row:nth-child(4) { margin-left: 60px; }
+        
+        .key { width: 38px; height: 38px; display: flex; justify-content: center; align-items: center; font-weight: bold; border-radius: 4px; background: #fff; box-shadow: 0 2px 0 #bdc3c7; border: 1px solid #dcdde1; transition: all 0.1s; font-size: 14px;}
+        .key.active { transform: translateY(2px) scale(1.1); box-shadow: 0 0 0 #bdc3c7; filter: brightness(0.9); border: 2px solid #2c3e50; z-index: 10;}
+
+        /* 手指颜色映射 */
+        .finger-0 { background-color: #ff9ff3; } 
+        .finger-1 { background-color: #feca57; } 
+        .finger-2 { background-color: #ff6b6b; } 
+        .finger-3 { background-color: #1dd1a1; } 
+        .finger-4 { background-color: #48dbfb; } 
+        .finger-5 { background-color: #54a0ff; } 
+        .finger-6 { background-color: #5f27cd; color: white;} /* 深色背景配白字 */
+        .finger-7 { background-color: #c8d6e5; } 
+
+        /* 计数器区 */
+        .counters { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 15px; }
+        .counter-box { flex: 1; display: flex; flex-direction: column; align-items: center; background: #f8f9fa; border-radius: 6px; padding: 8px 4px; border: 2px solid transparent; transition: all 0.2s;}
+        .counter-box.active { transform: scale(1.1); box-shadow: 0 4px 10px rgba(0,0,0,0.15); border-color: #2c3e50; z-index: 10;}
+        .finger-name { font-size: 12px; font-weight: bold; margin-bottom: 5px; color: #555; text-align: center; white-space: nowrap;}
+        
+        /* 修复数字看不见的 Bug：强制将这里的数字颜色设为深色 #2c3e50 */
+        .finger-val { font-size: 22px; font-weight: bold; background: white; color: #2c3e50; width: 100%; text-align: center; border-radius: 4px; padding: 4px 0; }
+        
+        /* 日志输出 */
+        .log-box { background: #2c3e50; color: #ecf0f1; padding: 12px 15px; border-radius: 6px; font-family: monospace; font-size: 14px; min-height: 85px; }
+        .log-highlight { color: #f1c40f; font-weight: bold; font-size: 16px;}
+        .log-code { color: #2ecc71; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>方法一：查表匹配法 (单步演示)</h2>
+    
+    <div class="controls">
+        <input type="text" id="inputStr" value="AON=BOO;" maxlength="30" placeholder="大写字符">
+        <button class="btn-step" id="btnStep" onclick="nextStep()">👣 单步执行</button>
+        <button class="btn-play" id="btnPlay" onclick="autoPlay()">▶ 自动播放</button>
+        <button class="btn-reset" onclick="resetAll()">重置</button>
+    </div>
+
+    <div class="string-display" id="strDisplay"></div>
+
+    <div class="keyboard" id="keyboard">
+        <div class="kb-row" id="row1"></div>
+        <div class="kb-row" id="row2"></div>
+        <div class="kb-row" id="row3"></div>
+        <div class="kb-row" id="row4"></div>
+    </div>
+
+    <div class="counters">
+        <div class="counter-box finger-0" id="cnt-0"><div class="finger-name">0:左小指</div><div class="finger-val" id="val-0">0</div></div>
+        <div class="counter-box finger-1" id="cnt-1"><div class="finger-name">1:左无名</div><div class="finger-val" id="val-1">0</div></div>
+        <div class="counter-box finger-2" id="cnt-2"><div class="finger-name">2:左中指</div><div class="finger-val" id="val-2">0</div></div>
+        <div class="counter-box finger-3" id="cnt-3"><div class="finger-name">3:左食指</div><div class="finger-val" id="val-3">0</div></div>
+        <div class="counter-box finger-4" id="cnt-4"><div class="finger-name">4:右食指</div><div class="finger-val" id="val-4">0</div></div>
+        <div class="counter-box finger-5" id="cnt-5"><div class="finger-name">5:右中指</div><div class="finger-val" id="val-5">0</div></div>
+        <div class="counter-box finger-6" id="cnt-6"><div class="finger-name">6:右无名</div><div class="finger-val" id="val-6">0</div></div>
+        <div class="counter-box finger-7" id="cnt-7"><div class="finger-name">7:右小指</div><div class="finger-val" id="val-7">0</div></div>
+    </div>
+
+    <div class="log-box" id="logBox">
+        就绪。点击“单步执行”开始模拟外层遍历字符串、内层查表的双重循环过程。
+    </div>
+</div>
+
+<script>
+    // 核心打表数据：8个字符串
+    const keysTable = [
+        "1QAZ",             // 0
+        "2WSX",             // 1
+        "3EDC",             // 2
+        "45RTFGVB",         // 3
+        "67YUHJNM",         // 4
+        "8IK,",             // 5
+        "9OL.",             // 6
+        "0-=P[];'/"         // 7
+    ];
+
+    // 键盘按键布局
+    const keyboardLayout = [
+        ['1','2','3','4','5','6','7','8','9','0','-','='],
+        ['Q','W','E','R','T','Y','U','I','O','P','[',']'],
+        ['A','S','D','F','G','H','J','K','L',';','\''],
+        ['Z','X','C','V','B','N','M',',','.','/']
+    ];
+
+    let counts = [0,0,0,0,0,0,0,0];
+    let currentIdx = 0;
+    let isDone = false;
+    let autoTimer = null;
+
+    // 初始化键盘渲染
+    function initKeyboard() {
+        for (let r = 0; r < 4; r++) {
+            const rowDiv = document.getElementById(`row${r+1}`);
+            rowDiv.innerHTML = '';
+            keyboardLayout[r].forEach(char => {
+                const keyDiv = document.createElement('div');
+                keyDiv.className = 'key';
+                keyDiv.id = 'key-' + char;
+                keyDiv.innerText = char;
+                
+                // 查找该键属于哪个手指，并赋予颜色类
+                for (let i = 0; i < 8; i++) {
+                    if (keysTable[i].includes(char)) {
+                        keyDiv.classList.add(`finger-${i}`);
+                        break;
+                    }
+                }
+                rowDiv.appendChild(keyDiv);
+            });
+        }
+    }
+
+    // 根据输入渲染顶部字符串
+    function renderString(str, activeIdx) {
+        const display = document.getElementById('strDisplay');
+        display.innerHTML = '';
+        for (let i = 0; i < str.length; i++) {
+            const span = document.createElement('span');
+            span.innerText = str[i];
+            if (i < activeIdx) span.className = 'char-done';
+            else if (i === activeIdx) span.className = 'char-active';
+            else span.className = 'char-normal';
+            display.appendChild(span);
+        }
+    }
+
+    // 清除上一步的高亮状态
+    function clearHighlights() {
+        document.querySelectorAll('.key').forEach(k => k.classList.remove('active'));
+        document.querySelectorAll('.counter-box').forEach(c => c.classList.remove('active'));
+    }
+
+    // 重置状态
+    function resetAll() {
+        clearTimeout(autoTimer);
+        counts = [0,0,0,0,0,0,0,0];
+        currentIdx = 0;
+        isDone = false;
+        
+        for(let i=0; i<8; i++) {
+            document.getElementById(`val-${i}`).innerText = 0;
+        }
+        clearHighlights();
+        
+        document.getElementById('btnStep').disabled = false;
+        document.getElementById('btnPlay').disabled = false;
+        document.getElementById('inputStr').disabled = false;
+        document.getElementById('logBox').innerHTML = '已重置。等待开始...';
+        
+        renderString(document.getElementById('inputStr').value.toUpperCase(), -1);
+    }
+
+    // 单步核心逻辑
+    function nextStep() {
+        const inputStr = document.getElementById('inputStr').value.toUpperCase();
+        if(!inputStr) return;
+        
+        document.getElementById('inputStr').disabled = true;
+        clearHighlights();
+
+        if (isDone || currentIdx >= inputStr.length) {
+            isDone = true;
+            document.getElementById('btnStep').disabled = true;
+            document.getElementById('btnPlay').disabled = true;
+            document.getElementById('logBox').innerHTML = `✅ <span style="color:#2ecc71;">字符串遍历完毕！</span><br>
+            <span style="color:#bdc3c7;">时间复杂度分析：处理了 ${inputStr.length} 个字符，每次最多遍历 8 个桶，共查找约 ${inputStr.length} × 8 次。</span>`;
+            renderString(inputStr, currentIdx);
+            return;
+        }
+
+        const char = inputStr[currentIdx];
+        renderString(inputStr, currentIdx);
+
+        let foundFinger = -1;
+        let searchLog = [];
+        
+        // 模拟 C++ 代码中的 for(int i=0; i<8; ++i) 查表过程
+        for (let i = 0; i < 8; i++) {
+            if (keysTable[i].includes(char)) {
+                foundFinger = i;
+                searchLog.push(`桶${i}: <span class="log-code">找到</span>`);
+                break; // 找到就 break
+            } else {
+                searchLog.push(`桶${i}: 未找到`);
+            }
+        }
+
+        const logBox = document.getElementById('logBox');
+        if (foundFinger !== -1) {
+            // 找到了
+            counts[foundFinger]++;
+            
+            // 更新UI
+            const keyElem = document.getElementById('key-' + char);
+            if (keyElem) keyElem.classList.add('active');
+            
+            const cntElem = document.getElementById(`cnt-${foundFinger}`);
+            cntElem.classList.add('active');
+            document.getElementById(`val-${foundFinger}`).innerText = counts[foundFinger];
+
+            // 截取前几个没找到的日志，让过程更真实
+            let processText = searchLog.join(" → ");
+            
+            logBox.innerHTML = `当前字符: <span class="log-highlight">'${char}'</span><br>` +
+                               `<span style="color:#bdc3c7; font-size:12px;">查找过程: ${processText}</span><br>` + 
+                               `=> 归属确认！手指 <strong style="color:#e74c3c; font-size:16px;">${foundFinger}</strong> 计数 +1`;
+        } else {
+            logBox.innerHTML = `当前字符: <span class="log-highlight">'${char}'</span><br>` +
+                               `<span style="color:#e74c3c;">在所有 8 个 keys[] 桶中均未找到该字符，跳过。</span>`;
+        }
+
+        currentIdx++;
+    }
+
+    // 自动播放
+    function autoPlay() {
+        document.getElementById('btnPlay').disabled = true;
+        document.getElementById('btnStep').disabled = true;
+        
+        function loop() {
+            if (!isDone) {
+                nextStep();
+                autoTimer = setTimeout(loop, 800); // 每步 800ms
+            }
+        }
+        loop();
+    }
+
+    // 页面加载完成初始化
+    window.onload = () => {
+        initKeyboard();
+        renderString(document.getElementById('inputStr').value.toUpperCase(), -1);
+    };
+
+    // 监听输入框变化实时更新
+    document.getElementById('inputStr').addEventListener('input', function(e) {
+        if(currentIdx === 0) renderString(e.target.value.toUpperCase(), -1);
+    });
+
+</script>
+</body>
+</html>

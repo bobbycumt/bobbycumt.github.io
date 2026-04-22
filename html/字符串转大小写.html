@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>C++ 字符串大小写转换与 ASCII 沙盘</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f2f5;
+            color: #333;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+        h2, h3 { color: #1a252f; margin-top: 0; }
+        .control-panel { 
+            display: flex; gap: 15px; margin-bottom: 20px; align-items: center; flex-wrap: wrap;
+        }
+        input[type="text"] {
+            padding: 10px 15px; font-size: 16px; border: 2px solid #bdc3c7; 
+            border-radius: 6px; width: 200px; font-family: monospace;
+        }
+        select {
+            padding: 10px; font-size: 16px; border: 2px solid #bdc3c7; border-radius: 6px;
+        }
+        button {
+            padding: 10px 18px; font-size: 15px; cursor: pointer; border: none; 
+            border-radius: 6px; color: white; transition: all 0.2s; font-weight: bold;
+        }
+        button:disabled { background-color: #bdc3c7 !important; cursor: not-allowed; transform: none !important;}
+        button:active { transform: scale(0.98); }
+        
+        .btn-blind { background-color: #e74c3c; } /* 盲目 - 红色警告 */
+        .btn-blind:hover { background-color: #c0392b; }
+        .btn-cond { background-color: #f39c12; }  /* 条件 - 橙色 */
+        .btn-cond:hover { background-color: #d68910; }
+        .btn-std { background-color: #2ecc71; }   /* 标准库 - 绿色安全 */
+        .btn-std:hover { background-color: #27ae60; }
+        .btn-reset { background-color: #34495e; }
+        .btn-reset:hover { background-color: #2c3e50; }
+
+        /* 字符串可视化区 */
+        .string-container {
+            display: flex; justify-content: center; gap: 15px; margin: 30px 0; min-height: 100px;
+        }
+        .char-box {
+            display: flex; flex-direction: column; align-items: center; width: 60px;
+        }
+        .char-display {
+            width: 60px; height: 60px; background: #ecf0f1; border: 3px solid #bdc3c7;
+            border-radius: 8px; display: flex; justify-content: center; align-items: center;
+            font-size: 28px; font-family: monospace; font-weight: bold; color: #2c3e50;
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            position: relative;
+        }
+        .ascii-display {
+            margin-top: 8px; font-size: 14px; color: #7f8c8d; font-family: monospace;
+            background: #e8ecef; padding: 2px 8px; border-radius: 12px; transition: all 0.3s;
+        }
+        
+        /* 动画状态类 */
+        .scanning .char-display { border-color: #3498db; transform: translateY(-10px); box-shadow: 0 10px 15px rgba(52, 152, 219, 0.3); }
+        .changed .char-display { background-color: #ffeaa7; border-color: #f39c12; color: #d35400; }
+        .error-char .char-display { background-color: #ffcccc; border-color: #e74c3c; color: #c0392b; }
+        .safe-char .char-display { background-color: #d5f5e3; border-color: #2ecc71; color: #27ae60; }
+
+        /* 日志区 */
+        .terminal {
+            background: #1e1e1e; color: #d4d4d4; font-family: 'Consolas', monospace;
+            padding: 15px; border-radius: 8px; height: 200px; overflow-y: auto; line-height: 1.6;
+        }
+        .log-info { color: #569cd6; }
+        .log-warn { color: #ce9178; }
+        .log-error { color: #f44747; }
+        .log-success { color: #b5cea8; }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <h2>C++ 字符串大小写转换核心逻辑</h2>
+        <div class="control-panel">
+            <input type="text" id="strInput" value="aB3!z" maxlength="10" placeholder="输入测试字符串(最多10位)">
+            <select id="targetCase">
+                <option value="upper">目标：全部转大写 (ASCII -32)</option>
+                <option value="lower">目标：全部转小写 (ASCII +32)</option>
+            </select>
+            <button class="btn-reset" onclick="initString()">加载/重置字符串</button>
+        </div>
+        
+        <div class="control-panel" style="border-top: 1px solid #eee; padding-top: 15px;">
+            <button class="btn-blind" id="btnBlind" onclick="executeAlgorithm('blind')">1. 执行盲目 ±32 (错误示范)</button>
+            <button class="btn-cond" id="btnCond" onclick="executeAlgorithm('conditional')">2. 带范围判断的 ±32 (底层原理)</button>
+            <button class="btn-std" id="btnStd" onclick="executeAlgorithm('stdlib')">3. 调用 toupper/tolower (工程实践)</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>内存与 ASCII 视图</h3>
+        <div class="string-container" id="stringView"></div>
+    </div>
+
+    <div class="card">
+        <h3>代码执行控制台</h3>
+        <div class="terminal" id="terminal"></div>
+    </div>
+
+    <script>
+        let currentChars = [];
+        let isAnimating = false;
+
+        // 辅助函数：将ASCII转换为可显示字符，处理乱码
+        function getDisplayChar(code) {
+            if (code < 32 || code > 126) return ''; // 不可见字符显示为问号
+            return String.fromCharCode(code);
+        }
+
+        // 初始化/重置UI
+        function initString() {
+            if (isAnimating) return;
+            const input = document.getElementById('strInput').value;
+            currentChars = input.split('').map(c => c.charCodeAt(0));
+            renderString();
+            clearTerminal();
+            log(`<span class="log-info">系统：</span> 已加载字符串 "${input}"。准备就绪。`);
+        }
+
+        // 渲染字符串阵列
+        function renderString() {
+            const container = document.getElementById('stringView');
+            container.innerHTML = '';
+            currentChars.forEach((code, index) => {
+                const box = document.createElement('div');
+                box.className = 'char-box';
+                box.id = `box-${index}`;
+                
+                const charDiv = document.createElement('div');
+                charDiv.className = 'char-display';
+                charDiv.innerText = getDisplayChar(code);
+                
+                const asciiDiv = document.createElement('div');
+                asciiDiv.className = 'ascii-display';
+                asciiDiv.innerText = code;
+                
+                box.appendChild(charDiv);
+                box.appendChild(asciiDiv);
+                container.appendChild(box);
+            });
+        }
+
+        // 终端日志打印
+        function log(htmlMsg) {
+            const terminal = document.getElementById('terminal');
+            const p = document.createElement('div');
+            p.innerHTML = htmlMsg;
+            terminal.appendChild(p);
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        function clearTerminal() {
+            document.getElementById('terminal').innerHTML = '';
+        }
+
+        // 延迟函数，用于产生动画步进效果
+        const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+        // 核心执行逻辑
+        async function executeAlgorithm(type) {
+            if (isAnimating) return;
+            isAnimating = true;
+            initString(); // 每次执行前重置为初始状态
+            
+            const isUpperTarget = document.getElementById('targetCase').value === 'upper';
+            const offset = isUpperTarget ? -32 : 32;
+            const opName = isUpperTarget ? "大写" : "小写";
+            
+            log(`\n<span class="log-info">================ 开始执行 ================</span>`);
+            
+            // 锁定按钮
+            document.querySelectorAll('button').forEach(b => b.disabled = true);
+
+            for (let i = 0; i < currentChars.length; i++) {
+                let code = currentChars[i];
+                let charStr = getDisplayChar(code);
+                
+                // 1. 高亮当前正在处理的字符
+                const box = document.getElementById(`box-${i}`);
+                box.classList.add('scanning');
+                log(`正在处理 s[${i}]: '${charStr}' (ASCII: ${code})`);
+                await sleep(800); // 停顿让学生看清
+
+                let newCode = code;
+                let statusClass = '';
+
+                // 2. 根据不同算法处理
+                if (type === 'blind') {
+                    newCode = code + offset;
+                    // 盲目模式下，如果是字母且转换正确，标黄色；如果是数字/符号被破坏了，标红色报警
+                    if ((isUpperTarget && code >= 97 && code <= 122) || (!isUpperTarget && code >= 65 && code <= 90)) {
+                        statusClass = 'changed';
+                        log(`&nbsp;&nbsp;盲目计算: ${code} ${offset > 0 ? '+32' : '-32'} = ${newCode} -> '${getDisplayChar(newCode)}'`);
+                    } else {
+                        statusClass = 'error-char';
+                        log(`&nbsp;&nbsp;<span class="log-error">灾难！盲目计算破坏了非目标字符: '${charStr}' 变成了乱码 '${getDisplayChar(newCode)}'</span>`);
+                    }
+                } 
+                else if (type === 'conditional') {
+                    let conditionMatch = false;
+                    if (isUpperTarget && code >= 97 && code <= 122) conditionMatch = true; // a-z
+                    if (!isUpperTarget && code >= 65 && code <= 90) conditionMatch = true; // A-Z
+
+                    if (conditionMatch) {
+                        newCode = code + offset;
+                        statusClass = 'changed';
+                        log(`&nbsp;&nbsp;<span class="log-success">if 条件成立</span>: ${code} ${offset > 0 ? '+32' : '-32'} = ${newCode} -> '${getDisplayChar(newCode)}'`);
+                    } else {
+                        statusClass = 'safe-char';
+                        log(`&nbsp;&nbsp;<span class="log-warn">if 条件不成立 (非对应字母)</span>: 安全跳过。`);
+                    }
+                }
+                else if (type === 'stdlib') {
+                    // 模拟标准库调用
+                    log(`&nbsp;&nbsp;调用 ${isUpperTarget ? 'toupper' : 'tolower'}('${charStr}') ...`);
+                    await sleep(400); // 模拟函数黑盒处理时间
+                    
+                    if (isUpperTarget && code >= 97 && code <= 122) newCode = code - 32;
+                    else if (!isUpperTarget && code >= 65 && code <= 90) newCode = code + 32;
+                    
+                    if (newCode !== code) {
+                        statusClass = 'changed';
+                        log(`&nbsp;&nbsp;<span class="log-success">函数返回新字符</span>: '${getDisplayChar(newCode)}'`);
+                    } else {
+                        statusClass = 'safe-char';
+                        log(`&nbsp;&nbsp;<span class="log-warn">函数判断非对应字母，原样返回</span>: '${charStr}'`);
+                    }
+                }
+
+                // 3. 更新 UI
+                currentChars[i] = newCode;
+                box.querySelector('.char-display').innerText = getDisplayChar(newCode);
+                box.querySelector('.ascii-display').innerText = newCode;
+                
+                box.classList.remove('scanning');
+                if (statusClass) box.classList.add(statusClass);
+                
+                await sleep(500);
+            }
+
+            log(`<span class="log-info">================ 执行完毕 ================</span>`);
+            // 解锁按钮
+            document.querySelectorAll('button').forEach(b => b.disabled = false);
+            isAnimating = false;
+        }
+
+        // 页面加载完成初始化
+        window.onload = initString;
+    </script>
+</body>
+</html>

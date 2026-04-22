@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>C++ 连续空格过滤算法沙盘</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f7f6; color: #333; max-width: 950px; margin: 0 auto; padding: 20px;
+        }
+        .card {
+            background: white; border-radius: 12px; padding: 25px; margin-bottom: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.06);
+        }
+        h2, h3 { color: #2c3e50; margin-top: 0; }
+        .control-panel { display: flex; gap: 15px; margin-bottom: 20px; align-items: center; }
+        input[type="text"] {
+            padding: 10px; font-size: 16px; border: 2px solid #ddd; border-radius: 6px; 
+            font-family: monospace; width: 350px;
+        }
+        button {
+            padding: 10px 20px; font-size: 15px; cursor: pointer; border: none; 
+            border-radius: 6px; color: white; transition: all 0.2s; font-weight: bold;
+        }
+        button:disabled { background-color: #bdc3c7 !important; cursor: not-allowed; }
+        .btn-reset { background-color: #7f8c8d; } .btn-reset:hover { background-color: #636e72; }
+        .btn-step { background-color: #0984e3; } .btn-step:hover { background-color: #74b9ff; }
+        .btn-auto { background-color: #00b894; } .btn-auto:hover { background-color: #55efc4; }
+
+        /* 网格阵列样式 */
+        .array-container {
+            display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; min-height: 70px;
+            padding: 15px; background: #f8f9fa; border-radius: 8px; border: 1px solid #eee;
+            align-items: flex-end;
+        }
+        .array-label {
+            width: 100%; font-weight: bold; color: #6c757d; margin-bottom: 10px; font-size: 14px;
+        }
+        
+        .char-wrapper {
+            display: flex; flex-direction: column; align-items: center; gap: 5px;
+        }
+        .index-label {
+            font-size: 12px; color: #b2bec3; font-family: monospace;
+        }
+        .char-box {
+            width: 45px; height: 45px; background: white; border: 2px solid #dfe6e9;
+            border-radius: 8px; display: flex; justify-content: center; align-items: center;
+            font-size: 20px; font-family: monospace; font-weight: bold; color: #2d3436;
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            position: relative;
+        }
+        
+        /* 字符特殊状态 */
+        .char-box.is-space { color: #b2bec3; } /* 空格符号颜色变淡 */
+        .char-box.scanning { 
+            border-color: #0984e3; background-color: #e3f2fd; transform: translateY(-5px); 
+            box-shadow: 0 5px 15px rgba(9, 132, 227, 0.3); z-index: 10;
+        }
+        .char-box.look-behind {
+            border-color: #fdcb6e; background-color: #fff9c4; border-style: dashed;
+        }
+        .char-box.discarded {
+            border-color: #d63031; background-color: #ff7675; color: white; opacity: 0.8;
+            transform: scale(0.9);
+        }
+        .char-box.kept {
+            border-color: #00b894; background-color: #d5ffe6;
+        }
+
+        /* 结果区特定样式 */
+        .result-box {
+            background: #00b894; color: white; border-color: #00b894; animation: popIn 0.3s ease;
+        }
+        @keyframes popIn { 0% { transform: scale(0.5); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+
+        /* 日志区 */
+        .log-panel {
+            background: #2d3436; color: #dfe6e9; font-family: 'Consolas', monospace; font-size: 14px;
+            padding: 15px; border-radius: 8px; height: 200px; overflow-y: auto; line-height: 1.6;
+        }
+        .log-hl { color: #74b9ff; font-weight: bold; }
+        .log-keep { color: #55efc4; }
+        .log-drop { color: #ff7675; }
+        .log-check { color: #ffeaa7; }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <h2>多余空格过滤算法 (Look-behind 策略)</h2>
+        <div class="control-panel">
+            <input type="text" id="strInput" value="C++   is  fun" placeholder="输入包含连续空格的字符串...">
+            <button class="btn-reset" onclick="initSimulation()">加载 / 重置</button>
+            <button class="btn-step" id="btnStep" onclick="step()">步进 (Step)</button>
+            <button class="btn-auto" id="btnAuto" onclick="toggleAutoPlay()">自动播放</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="array-container" id="sourceArray">
+            <div class="array-label">源字符串 s[i] (扫描区)</div>
+            </div>
+
+        <div class="array-container" style="min-height: 90px;" id="resultArray">
+            <div class="array-label">结果字符串 result (保留区)</div>
+            </div>
+    </div>
+
+    <div class="card">
+        <h3>算法判定日志</h3>
+        <div class="log-panel" id="logPanel"></div>
+    </div>
+
+    <script>
+        let sourceStr = "";
+        let currentIndex = 0;
+        let isFinished = false;
+        let autoPlayTimer = null;
+        let isAutoPlaying = false;
+
+        // 获取可视化的空格符号
+        function getCharDisplay(c) {
+            return c === ' ' ? '␣' : c;
+        }
+
+        function log(htmlMsg) {
+            const panel = document.getElementById('logPanel');
+            panel.innerHTML += `<div>> ${htmlMsg}</div>`;
+            panel.scrollTop = panel.scrollHeight;
+        }
+
+        // 初始化/重置沙盘
+        function initSimulation() {
+            stopAutoPlay();
+            sourceStr = document.getElementById('strInput').value;
+            if(!sourceStr) sourceStr = " ";
+            currentIndex = 0;
+            isFinished = false;
+            
+            document.getElementById('btnStep').disabled = false;
+            document.getElementById('logPanel').innerHTML = '';
+            document.getElementById('resultArray').innerHTML = '<div class="array-label">结果字符串 result (保留区)</div>';
+
+            const srcContainer = document.getElementById('sourceArray');
+            srcContainer.innerHTML = '<div class="array-label">源字符串 s[i] (扫描区)</div>';
+            
+            for (let i = 0; i < sourceStr.length; i++) {
+                let charStr = getCharDisplay(sourceStr[i]);
+                let isSpace = sourceStr[i] === ' ';
+                
+                srcContainer.innerHTML += `
+                    <div class="char-wrapper">
+                        <div class="char-box ${isSpace ? 'is-space' : ''}" id="src-${i}">${charStr}</div>
+                        <div class="index-label">i=${i}</div>
+                    </div>
+                `;
+            }
+            log(`初始化完成。准备扫描长度为 ${sourceStr.length} 的字符串。`);
+        }
+
+        // 追加到结果区
+        function appendToResult(char) {
+            const resContainer = document.getElementById('resultArray');
+            resContainer.innerHTML += `
+                <div class="char-wrapper">
+                    <div class="char-box result-box">${getCharDisplay(char)}</div>
+                </div>
+            `;
+        }
+
+        // 核心步进逻辑
+        function step() {
+            if (isFinished) return;
+
+            // 1. 清除之前的高亮状态
+            document.querySelectorAll('.char-box').forEach(b => {
+                b.classList.remove('scanning', 'look-behind');
+            });
+
+            const i = currentIndex;
+            const currentChar = sourceStr[i];
+            const currentBox = document.getElementById(`src-${i}`);
+            
+            // 2. 高亮当前正在处理的字符
+            currentBox.classList.add('scanning');
+            
+            let logMsg = `[i=<span class="log-hl">${i}</span>] 当前 s[i] 为 '${getCharDisplay(currentChar)}'。`;
+
+            // 3. 算法判定分支
+            if (currentChar !== ' ') {
+                // 情况A：非空格，直接保留
+                logMsg += `<span class="log-keep">非空格，直接保留。</span>`;
+                currentBox.classList.add('kept');
+                appendToResult(currentChar);
+            } else {
+                // 情况B：是空格，需要 Look-behind
+                if (i > 0) {
+                    const prevChar = sourceStr[i-1];
+                    const prevBox = document.getElementById(`src-${i-1}`);
+                    prevBox.classList.add('look-behind'); // 高亮前一个字符（黄色虚线框）
+                    
+                    logMsg += `<span class="log-check">是空格！向后检查 s[${i-1}] ('${getCharDisplay(prevChar)}')... </span>`;
+                    
+                    if (prevChar !== ' ') {
+                        logMsg += `<span class="log-keep">前一个不是空格，这是首个空格，保留。</span>`;
+                        currentBox.classList.add('kept');
+                        appendToResult(currentChar);
+                    } else {
+                        logMsg += `<span class="log-drop">前一个也是空格！拦截！丢弃该多余空格。</span>`;
+                        currentBox.classList.add('discarded');
+                    }
+                } else {
+                    // i == 0 的边界情况
+                    logMsg += `<span class="log-check">是空格！但 i==0，触发短路保护，无需检查前置字符。</span> <span class="log-keep">首位空格，保留。</span>`;
+                    currentBox.classList.add('kept');
+                    appendToResult(currentChar);
+                }
+            }
+
+            log(logMsg);
+            currentIndex++;
+
+            if (currentIndex >= sourceStr.length) {
+                isFinished = true;
+                document.getElementById('btnStep').disabled = true;
+                stopAutoPlay();
+                log(`<br><span class="log-hl">===== 字符串遍历结束！算法执行完毕 =====</span>`);
+            }
+        }
+
+        // 自动播放控制
+        function toggleAutoPlay() {
+            const btn = document.getElementById('btnAuto');
+            if (isAutoPlaying) {
+                stopAutoPlay();
+            } else {
+                if(isFinished) initSimulation();
+                isAutoPlaying = true;
+                btn.innerText = "暂停自动播放";
+                btn.style.backgroundColor = "#e17055"; // 变成红色暂停键
+                autoPlayTimer = setInterval(step, 800); // 每 800ms 执行一步
+            }
+        }
+
+        function stopAutoPlay() {
+            isAutoPlaying = false;
+            clearInterval(autoPlayTimer);
+            const btn = document.getElementById('btnAuto');
+            btn.innerText = "自动播放";
+            btn.style.backgroundColor = "#00b894";
+        }
+
+        // 页面加载完成后初始化
+        window.onload = initSimulation;
+    </script>
+</body>
+</html>

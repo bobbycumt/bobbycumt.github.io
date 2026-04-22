@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>C++ 字符串字典序比较沙盘</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fa; color: #333; max-width: 900px; margin: 0 auto; padding: 20px;
+        }
+        .card {
+            background: white; border-radius: 12px; padding: 25px; margin-bottom: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        }
+        h2, h3 { color: #2c3e50; margin-top: 0; }
+        .control-panel { display: flex; gap: 15px; margin-bottom: 20px; align-items: center; }
+        input[type="text"] {
+            padding: 10px; font-size: 16px; border: 2px solid #ddd; border-radius: 6px; font-family: monospace; width: 150px;
+        }
+        button {
+            padding: 10px 20px; font-size: 16px; cursor: pointer; border: none; 
+            border-radius: 6px; color: white; transition: all 0.2s; font-weight: bold;
+        }
+        button:disabled { background-color: #bdc3c7 !important; cursor: not-allowed; }
+        .btn-reset { background-color: #95a5a6; } .btn-reset:hover { background-color: #7f8c8d; }
+        .btn-step { background-color: #3498db; } .btn-step:hover { background-color: #2980b9; }
+        
+        /* 比较网格区域 */
+        .compare-grid { display: flex; flex-direction: column; gap: 10px; margin: 30px 0; align-items: center;}
+        .string-row { display: flex; gap: 8px; align-items: center; }
+        .row-label { font-weight: bold; width: 80px; color: #555; text-align: right; margin-right: 10px;}
+        .char-col {
+            display: flex; flex-direction: column; align-items: center; gap: 5px;
+        }
+        .char-box {
+            width: 50px; height: 50px; background: #ecf0f1; border: 2px solid #bdc3c7;
+            border-radius: 8px; display: flex; justify-content: center; align-items: center;
+            font-size: 24px; font-family: monospace; font-weight: bold; color: #2c3e50;
+            transition: all 0.3s;
+        }
+        .char-box.null-char { background: #fdfefe; color: #bdc3c7; border-style: dashed; font-size: 16px;}
+        
+        /* 状态高亮 */
+        .scanning { border-color: #f1c40f; background-color: #fcf3cf; transform: scale(1.05); box-shadow: 0 0 10px rgba(241, 196, 15, 0.5); }
+        .equal { border-color: #2ecc71; background-color: #eaeded; color: #27ae60; opacity: 0.6; }
+        .winner { border-color: #e74c3c; background-color: #fadbd8; color: #c0392b; transform: scale(1.1); font-size: 28px; z-index: 10;}
+        .loser { border-color: #95a5a6; background-color: #f2f4f4; color: #7f8c8d; opacity: 0.5; }
+
+        /* 索引指示器 */
+        .index-row { display: flex; gap: 8px; margin-left: 90px; margin-bottom: 5px; }
+        .index-marker { width: 54px; text-align: center; font-size: 14px; color: #999; font-family: monospace; }
+        .index-pointer { width: 54px; text-align: center; font-size: 20px; color: #e74c3c; font-weight: bold; transition: all 0.3s; opacity: 0;}
+        .index-pointer.active { opacity: 1; transform: translateY(-5px); }
+
+        /* 结果与日志 */
+        .result-banner {
+            text-align: center; font-size: 24px; font-weight: bold; padding: 15px; 
+            border-radius: 8px; margin-top: 20px; display: none;
+        }
+        .result-banner.show { display: block; animation: popIn 0.5s ease; }
+        @keyframes popIn { 0% { transform: scale(0.8); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+        
+        .log-box {
+            background: #2b2b2b; color: #a9b7c6; font-family: 'Consolas', monospace;
+            padding: 15px; border-radius: 8px; height: 180px; overflow-y: auto; line-height: 1.6;
+        }
+        .log-match { color: #b5cea8; } .log-diff { color: #ce9178; } .log-result { color: #569cd6; font-weight: bold;}
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <h2>字典序 (Lexicographical Order) 比较引擎</h2>
+        <div class="control-panel">
+            <label>字符串 1 (s1): </label>
+            <input type="text" id="str1" value="ABC" maxlength="10">
+            <label>字符串 2 (s2): </label>
+            <input type="text" id="str2" value="AACDE" maxlength="10">
+            <button class="btn-reset" onclick="initCompare()">加载并对齐</button>
+            <button class="btn-step" id="btnStep" onclick="stepForward()" disabled>执行比对 (Step)</button>
+        </div>
+    </div>
+
+    <div class="card" style="min-height: 250px;">
+        <div class="compare-grid" id="gridArea">
+            </div>
+        <div id="resultBanner" class="result-banner"></div>
+    </div>
+
+    <div class="card">
+        <h3>底层运算日志</h3>
+        <div class="log-box" id="logBox"></div>
+    </div>
+
+    <script>
+        let s1 = "", s2 = "";
+        let maxLength = 0;
+        let currentIndex = 0;
+        let isFinished = false;
+
+        function getCharData(str, index) {
+            if (index < str.length) {
+                let char = str[index];
+                return { char: char, code: char.charCodeAt(0), isNull: false };
+            } else {
+                return { char: '\\0', code: 0, isNull: true };
+            }
+        }
+
+        function log(msg) {
+            const logBox = document.getElementById('logBox');
+            logBox.innerHTML += `<div>> ${msg}</div>`;
+            logBox.scrollTop = logBox.scrollHeight;
+        }
+
+        function initCompare() {
+            s1 = document.getElementById('str1').value;
+            s2 = document.getElementById('str2').value;
+            maxLength = Math.max(s1.length, s2.length) + 1; // 多留一位展示 \0 或结尾
+            currentIndex = 0;
+            isFinished = false;
+
+            document.getElementById('logBox').innerHTML = '';
+            document.getElementById('resultBanner').className = 'result-banner';
+            document.getElementById('btnStep').disabled = false;
+            
+            log(`<span class="log-result">初始化完成。s1 = "${s1}", s2 = "${s2}"。长度对齐至 ${maxLength}。</span>`);
+            renderGrid();
+        }
+
+        function renderGrid() {
+            const gridArea = document.getElementById('gridArea');
+            let html = `<div class="index-row">`;
+            for(let i=0; i<maxLength; i++) html += `<div class="index-marker">i=${i}</div>`;
+            html += `</div>`;
+
+            // 指针行
+            html += `<div class="index-row">`;
+            for(let i=0; i<maxLength; i++) {
+                html += `<div class="index-pointer ${i === currentIndex && !isFinished ? 'active' : ''}" id="ptr-${i}">↓</div>`;
+            }
+            html += `</div>`;
+
+            // s1 行
+            html += `<div class="string-row"><div class="row-label">s1</div>`;
+            for(let i=0; i<maxLength; i++) {
+                let data = getCharData(s1, i);
+                html += `<div class="char-box ${data.isNull ? 'null-char' : ''}" id="s1-box-${i}">${data.char}</div>`;
+            }
+            html += `</div>`;
+
+            // s2 行
+            html += `<div class="string-row"><div class="row-label">s2</div>`;
+            for(let i=0; i<maxLength; i++) {
+                let data = getCharData(s2, i);
+                html += `<div class="char-box ${data.isNull ? 'null-char' : ''}" id="s2-box-${i}">${data.char}</div>`;
+            }
+            html += `</div>`;
+
+            gridArea.innerHTML = html;
+        }
+
+        function stepForward() {
+            if (isFinished) return;
+
+            let c1 = getCharData(s1, currentIndex);
+            let c2 = getCharData(s2, currentIndex);
+            
+            let box1 = document.getElementById(`s1-box-${currentIndex}`);
+            let box2 = document.getElementById(`s2-box-${currentIndex}`);
+            
+            // 扫描态
+            box1.classList.add('scanning');
+            box2.classList.add('scanning');
+
+            log(`比对索引 [${currentIndex}]: 获取 s1[${currentIndex}]='${c1.char}'(ASCII:${c1.code}) , s2[${currentIndex}]='${c2.char}'(ASCII:${c2.code})`);
+
+            setTimeout(() => {
+                box1.classList.remove('scanning');
+                box2.classList.remove('scanning');
+
+                if (c1.code === c2.code) {
+                    // 相等
+                    if (c1.isNull && c2.isNull) {
+                        // 都到了末尾
+                        declareWinner("equal");
+                    } else {
+                        box1.classList.add('equal');
+                        box2.classList.add('equal');
+                        log(`<span class="log-match">&nbsp;&nbsp;结果: ${c1.code} == ${c2.code}。字符完全相同，向后步进 i++。</span>`);
+                        currentIndex++;
+                        renderGrid(); // 刷新指针
+                    }
+                } else {
+                    // 发现差异
+                    log(`<span class="log-diff">&nbsp;&nbsp;发现差异！${c1.code} != ${c2.code}。比较立即终止！</span>`);
+                    if (c1.code > c2.code) {
+                        box1.classList.add('winner'); box2.classList.add('loser');
+                        declareWinner("s1");
+                    } else {
+                        box2.classList.add('winner'); box1.classList.add('loser');
+                        declareWinner("s2");
+                    }
+                }
+            }, 800);
+        }
+
+        function declareWinner(winner) {
+            isFinished = true;
+            document.getElementById('btnStep').disabled = true;
+            let banner = document.getElementById('resultBanner');
+            
+            if (winner === "s1") {
+                banner.innerHTML = "最终结果： <b>s1 > s2</b>";
+                banner.style.backgroundColor = "#d5f5e3"; banner.style.color = "#1e8449";
+                log(`<span class="log-result">因为 s1 的当前字符 ASCII 码更大，判定 s1 > s2。</span>`);
+            } else if (winner === "s2") {
+                banner.innerHTML = "最终结果： <b>s1 < s2</b>";
+                banner.style.backgroundColor = "#fadbd8"; banner.style.color = "#922b21";
+                log(`<span class="log-result">因为 s2 的当前字符 ASCII 码更大，判定 s1 < s2。</span>`);
+            } else {
+                banner.innerHTML = "最终结果： <b>s1 == s2</b>";
+                banner.style.backgroundColor = "#ebedef"; banner.style.color = "#2c3e50";
+                log(`<span class="log-result">所有字符完全匹配，判定 s1 == s2。</span>`);
+            }
+            banner.classList.add('show');
+            document.getElementById(`ptr-${currentIndex}`).classList.remove('active');
+        }
+
+        // 初始化空状态
+        window.onload = () => {
+            initCompare();
+        };
+    </script>
+</body>
+</html>

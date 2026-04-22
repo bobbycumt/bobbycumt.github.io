@@ -172,6 +172,7 @@
         currentLine: '',
         phase: '准备开始',
         done: false,
+        rowStarted: false,
         logs: ['初始化完成：准备进入外层循环 i=1。']
       };
       renderCode(-1);
@@ -192,9 +193,10 @@
         return;
       }
 
-      if (state.j === 1 && state.currentLine === '') {
+      if (!state.rowStarted) {
         state.phase = `进入第 ${state.i} 行（外层循环）`;
         pushLog(`外层循环：i=${state.i}，开始新的一行。`);
+        state.rowStarted = true;
         renderCode(0);
         render();
         return;
@@ -226,6 +228,7 @@
 
       state.i++;
       state.j = 1;
+      state.rowStarted = false;
 
       if (state.i > 9) {
         state.phase = '执行结束';

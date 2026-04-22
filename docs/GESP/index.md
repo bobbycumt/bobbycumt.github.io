@@ -1,7 +1,7 @@
 ---
-title: 其他
+title: $GESP$
 parent: 文档
-nav_order: 5
+nav_order: 3
 has_children: true
 ---
 

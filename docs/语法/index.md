@@ -1,6 +1,7 @@
 ---
 title: 语法
-nav_order: 3
+parent: 文档
+nav_order: 1
 has_children: true
 ---
 

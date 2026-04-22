@@ -1,7 +1,7 @@
 ---
 title: 其他
 parent: 文档
-nav_order: 1
+nav_order: 3
 has_children: true
 ---
 

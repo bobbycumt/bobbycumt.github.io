@@ -2,6 +2,8 @@ title: C++学习平台
 
 remote_theme: just-the-docs/just-the-docs
 
+mathjax: true
+
 plugins:
   - jekyll-remote-theme
 

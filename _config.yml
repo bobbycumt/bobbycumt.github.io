@@ -1,1 +1,21 @@
+title: C++学习平台
+
 remote_theme: just-the-docs/just-the-docs
+
+plugins:
+  - jekyll-remote-theme
+
+# 关键：定义文档集合
+collections:
+  docs:
+    output: true
+    permalink: /:collection/:path/
+
+# 默认应用到 docs
+defaults:
+  - scope:
+      path: "docs"
+      type: docs
+    values:
+      layout: default
+      nav_order: 1

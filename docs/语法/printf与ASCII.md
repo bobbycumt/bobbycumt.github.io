@@ -33,19 +33,29 @@ printf("平均值1为%.2lf，平均值2为%.3lf", a, b);
 
 ### 二、常用占位符速查
 
-| 占位符 | 参数类型 | 描述 | 示例输出 |
-| --- | --- | --- | --- |
-| `%d` | `int` | 有符号十进制整数 | `123` / `-123` |
-| `%2d` | `int` | 宽度 2，不足前补空格 | ` 5` |
-| `%02d` | `int` | 宽度 2，不足前补 0 | `05` |
-| `%f` | `float` | 浮点数（默认 6 位小数） | `3.141593` |
-| `%lf` | `double` | 双精度浮点数 | `3.141593` |
-| `%.2lf` | `double` | 保留 2 位小数 | `3.14` |
-| `%%` | 无 | 输出 `%` 本身 | `%` |
-| `%c` | `char` | 单个字符 | `A` |
-| `%s` | `char*` | 字符串（到 `\0`） | `Hello` |
-| `%x` / `%X` | `int` | 十六进制（小写/大写） | `ff` / `FF` |
-| `%o` | `int` | 八进制整数 | `177` |
+<table>
+  <thead>
+    <tr>
+      <th>占位符</th>
+      <th>参数类型</th>
+      <th>描述</th>
+      <th>示例输出</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td><code>%d</code></td><td><code>int</code></td><td>有符号十进制整数</td><td><code>123</code> / <code>-123</code></td></tr>
+    <tr><td><code>%2d</code></td><td><code>int</code></td><td>宽度 2，不足前补空格</td><td><code> 5</code></td></tr>
+    <tr><td><code>%02d</code></td><td><code>int</code></td><td>宽度 2，不足前补 0</td><td><code>05</code></td></tr>
+    <tr><td><code>%f</code></td><td><code>float</code></td><td>浮点数（默认 6 位小数）</td><td><code>3.141593</code></td></tr>
+    <tr><td><code>%lf</code></td><td><code>double</code></td><td>双精度浮点数</td><td><code>3.141593</code></td></tr>
+    <tr><td><code>%.2lf</code></td><td><code>double</code></td><td>保留 2 位小数</td><td><code>3.14</code></td></tr>
+    <tr><td><code>%%</code></td><td>无</td><td>输出 <code>%</code> 本身</td><td><code>%</code></td></tr>
+    <tr><td><code>%c</code></td><td><code>char</code></td><td>单个字符</td><td><code>A</code></td></tr>
+    <tr><td><code>%s</code></td><td><code>char*</code></td><td>字符串（到 <code>\0</code>）</td><td><code>Hello</code></td></tr>
+    <tr><td><code>%x</code> / <code>%X</code></td><td><code>int</code></td><td>十六进制（小写/大写）</td><td><code>ff</code> / <code>FF</code></td></tr>
+    <tr><td><code>%o</code></td><td><code>int</code></td><td>八进制整数</td><td><code>177</code></td></tr>
+  </tbody>
+</table>
 
 ---
 
@@ -59,15 +69,25 @@ printf("平均值1为%.2lf，平均值2为%.3lf", a, b);
 
 #### 高频区间表
 
-| 区间 | 十进制范围 | 十六进制范围 | 说明 |
-| --- | --- | --- | --- |
-| 空格与标点（前段） | 32~47 | 20~2F | 空格、常见符号 |
-| 数字 | 48~57 | 30~39 | `0~9` |
-| 标点（中段） | 58~64 | 3A~40 | `:;<=>?@` |
-| 大写字母 | 65~90 | 41~5A | `A~Z` |
-| 标点（后段） | 91~96 | 5B~60 | `[\\]^_\`` |
-| 小写字母 | 97~122 | 61~7A | `a~z` |
-| 标点（尾段） | 123~126 | 7B~7E | `{|}~` |
+<table>
+  <thead>
+    <tr>
+      <th>区间</th>
+      <th>十进制范围</th>
+      <th>十六进制范围</th>
+      <th>说明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td>空格与标点（前段）</td><td>32~47</td><td>20~2F</td><td>空格、常见符号</td></tr>
+    <tr><td>数字</td><td>48~57</td><td>30~39</td><td><code>0~9</code></td></tr>
+    <tr><td>标点（中段）</td><td>58~64</td><td>3A~40</td><td><code>:;&lt;=&gt;?@</code></td></tr>
+    <tr><td>大写字母</td><td>65~90</td><td>41~5A</td><td><code>A~Z</code></td></tr>
+    <tr><td>标点（后段）</td><td>91~96</td><td>5B~60</td><td><code>[\]^_`</code></td></tr>
+    <tr><td>小写字母</td><td>97~122</td><td>61~7A</td><td><code>a~z</code></td></tr>
+    <tr><td>标点（尾段）</td><td>123~126</td><td>7B~7E</td><td><code>{|}~</code></td></tr>
+  </tbody>
+</table>
 
 > 记忆技巧：`a - A = 32`，所以大小写转换常用 `±32`（仅限英文字母且注意边界）。
 

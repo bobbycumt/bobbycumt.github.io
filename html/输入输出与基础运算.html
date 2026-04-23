@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>cin/cout 与 int、运算符 交互PPT</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #111827;
+      --line: #334155;
+      --text: #e5e7eb;
+      --muted: #94a3b8;
+      --accent: #22d3ee;
+      --ok: #34d399;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+      background: radial-gradient(circle at top, #1e293b, #020617 70%);
+      color: var(--text);
+      font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    }
+    .app {
+      width: min(1080px, 100%);
+      background: rgba(17, 24, 39, .95);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 18px;
+      box-shadow: 0 18px 48px rgba(0, 0, 0, .35);
+    }
+    .toolbar { display: flex; justify-content: space-between; gap: 10px; align-items: center; margin-bottom: 12px; }
+    .title { font-size: 22px; font-weight: 700; }
+    .muted { color: var(--muted); }
+    .btns { display: flex; gap: 8px; flex-wrap: wrap; }
+    button {
+      border: 1px solid #475569;
+      background: #1e293b;
+      color: var(--text);
+      padding: 8px 12px;
+      border-radius: 9px;
+      cursor: pointer;
+    }
+    .slide {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #020617;
+      min-height: 470px;
+      padding: 16px;
+    }
+    .slide h2 { margin-top: 0; }
+    code, pre {
+      font-family: Consolas, Monaco, monospace;
+      background: #0b1221;
+      border: 1px solid #334155;
+      border-radius: 8px;
+    }
+    code { padding: 2px 6px; }
+    pre { padding: 10px; white-space: pre-wrap; }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .card { border: 1px solid var(--line); border-radius: 10px; padding: 10px; background: #0b1221; }
+    input {
+      width: 100%;
+      border-radius: 9px;
+      border: 1px solid var(--line);
+      background: #0b1221;
+      color: var(--text);
+      padding: 8px 10px;
+      margin-top: 6px;
+    }
+    .out { color: #fde68a; font-weight: 700; white-space: pre-wrap; }
+    .dot { color: var(--accent); font-weight: 700; }
+    .ok { color: var(--ok); font-weight: 700; }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <div class="toolbar">
+      <div>
+        <div class="title">输入输出与基础运算（交互PPT）</div>
+        <div class="muted">主题：<code>int</code>、<code>cin</code>、<code>cout</code>、<code>+ - * / %</code>、连续输入输出</div>
+      </div>
+      <div class="btns">
+        <button id="prevBtn">上一页</button>
+        <button id="nextBtn">下一页</button>
+      </div>
+    </div>
+
+    <section class="slide" id="slide"></section>
+  </main>
+
+  <script>
+    const slideEl = document.getElementById('slide');
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+
+    let page = 0;
+
+    function renderPage() {
+      const pages = [renderIntro, renderIntAndOps, renderCinCout, renderPractice, renderSummary];
+      pages[page]();
+      prevBtn.disabled = page === 0;
+      nextBtn.disabled = page === pages.length - 1;
+    }
+
+    function renderIntro() {
+      slideEl.innerHTML = `
+        <h2>第 1 页：知识地图</h2>
+        <p><span class="dot">●</span> <b>int</b>：整数类型</p>
+        <p><span class="dot">●</span> <b>cin</b>：输入数据到变量</p>
+        <p><span class="dot">●</span> <b>cout</b>：把变量/结果输出到屏幕</p>
+        <p><span class="dot">●</span> <b>+ - * / %</b>：基础整数运算</p>
+        <p><span class="dot">●</span> <b>连续输入输出</b>：<code>cin >> a >> b</code>、<code>cout << a << " " << b</code></p>
+        <pre>典型流程：定义变量 -> 输入 -> 计算 -> 输出</pre>
+      `;
+    }
+
+    function renderIntAndOps() {
+      slideEl.innerHTML = `
+        <h2>第 2 页：int 与数学运算符</h2>
+        <div class="grid">
+          <div class="card">
+            <h3>定义变量</h3>
+            <pre>int a = 7;
+int b = 2;</pre>
+            <h3>计算结果</h3>
+            <pre>a+b = 9
+a-b = 5
+a*b = 14
+a/b = 3   // 整除
+a%b = 1   // 余数</pre>
+          </div>
+          <div class="card">
+            <h3>重点提醒</h3>
+            <p>1) <code>/</code> 在 <code>int</code> 中是整除。</p>
+            <p>2) <code>%</code> 只适用于整数。</p>
+            <p>3) 除数不能为 0。</p>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderCinCout() {
+      slideEl.innerHTML = `
+        <h2>第 3 页：cin/cout 连续输入输出互动</h2>
+        <div class="grid">
+          <div class="card">
+            <h3>输入区（模拟 cin）</h3>
+            <label>请输入两个整数（空格分隔）</label>
+            <input id="inp" value="8 3" />
+            <button id="runBtn" style="margin-top:8px;">运行示例</button>
+            <pre>cin >> a >> b;
+cout << "a+b=" << a+b << "\n";
+cout << "a-b=" << a-b << "\n";
+cout << "a*b=" << a*b << "\n";
+cout << "a/b=" << a/b << "\n";
+cout << "a%b=" << a%b << "\n";</pre>
+          </div>
+          <div class="card">
+            <h3>输出区（模拟 cout）</h3>
+            <div id="out" class="out">点击“运行示例”查看结果</div>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('runBtn').addEventListener('click', () => {
+        const raw = document.getElementById('inp').value.trim();
+        const arr = raw.split(/[,\s]+/).filter(Boolean).map(Number);
+        const out = document.getElementById('out');
+
+        if (arr.length !== 2 || arr.some(v => Number.isNaN(v) || !Number.isInteger(v))) {
+          out.textContent = '输入错误：请只输入两个整数，例如 8 3';
+          return;
+        }
+
+        const [a, b] = arr;
+        if (b === 0) {
+          out.textContent = '错误：除数不能为 0（a/b 与 a%b 不合法）';
+          return;
+        }
+
+        out.textContent = [
+          `a+b=${a + b}`,
+          `a-b=${a - b}`,
+          `a*b=${a * b}`,
+          `a/b=${Math.trunc(a / b)}`,
+          `a%b=${a % b}`
+        ].join('\n');
+      });
+    }
+
+    function renderPractice() {
+      slideEl.innerHTML = `
+        <h2>第 4 页：常见易错点</h2>
+        <p>① 把 <code>=</code>（赋值）写成 <code>==</code>（比较）或反过来。</p>
+        <p>② 忘记 <code>int</code> 整除：<code>7/2</code> 结果是 <b>3</b>。</p>
+        <p>③ 忽略除数为 0 的情况。</p>
+        <p>④ 连续输出格式错：少空格、少换行。</p>
+        <pre class="ok">口诀：先声明，后输入；先计算，再输出；格式严格按题意。</pre>
+      `;
+    }
+
+    function renderSummary() {
+      slideEl.innerHTML = `
+        <h2>第 5 页：总结</h2>
+        <p><span class="dot">●</span> <code>int</code> 负责整数存储与运算。</p>
+        <p><span class="dot">●</span> <code>cin</code> 连续读取，<code>cout</code> 连续拼接输出。</p>
+        <p><span class="dot">●</span> 运算符 <code>+ - * / %</code> 是所有表达式基础。</p>
+        <p><span class="dot">●</span> 做题时优先保证：边界正确、输出格式正确。</p>
+        <pre>推荐课堂演示顺序：
+1) 两数四则运算
+2) 整除/取模对比
+3) 连续输入输出格式训练</pre>
+      `;
+    }
+
+    prevBtn.addEventListener('click', () => {
+      if (page > 0) page--;
+      renderPage();
+    });
+
+    nextBtn.addEventListener('click', () => {
+      if (page < 4) page++;
+      renderPage();
+    });
+
+    renderPage();
+  </script>
+</body>
+</html>

@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>printf与ASCII 交互PPT</title>
+  <style>
+    :root { --bg:#0f172a; --panel:#111827; --line:#334155; --text:#e5e7eb; --muted:#94a3b8; --accent:#22d3ee; }
+    *{box-sizing:border-box}
+    body{margin:0;min-height:100vh;background:radial-gradient(circle at top,#1e293b,#020617 70%);color:var(--text);font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;display:flex;justify-content:center;padding:22px}
+    .app{width:min(1080px,100%);background:rgba(17,24,39,.95);border:1px solid var(--line);border-radius:14px;padding:18px}
+    .top{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:12px}
+    .title{font-size:22px;font-weight:700}
+    .muted{color:var(--muted)}
+    button{border:1px solid #475569;background:#1e293b;color:var(--text);border-radius:9px;padding:8px 12px;cursor:pointer}
+    .slide{border:1px solid var(--line);border-radius:12px;background:#020617;min-height:480px;padding:16px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .card{border:1px solid var(--line);border-radius:10px;background:#0b1221;padding:10px}
+    code,pre{font-family:Consolas,monospace;background:#0b1221;border:1px solid #334155;border-radius:8px}
+    code{padding:2px 6px} pre{padding:10px;white-space:pre-wrap}
+    input{width:100%;border-radius:8px;border:1px solid var(--line);background:#0b1221;color:var(--text);padding:8px}
+    .out{color:#fde68a;font-weight:700;white-space:pre-wrap}
+    table{width:100%;border-collapse:collapse;font-size:14px}
+    th,td{border:1px solid #334155;padding:6px 8px;text-align:left}
+    th{background:#111827}
+  </style>
+</head>
+<body>
+  <main class="app">
+    <div class="top">
+      <div>
+        <div class="title">printf与ASCII（交互PPT）</div>
+        <div class="muted">占位符 / 宽度精度 / ASCII 字符码互转</div>
+      </div>
+      <div>
+        <button id="prevBtn">上一页</button>
+        <button id="nextBtn">下一页</button>
+      </div>
+    </div>
+    <section id="slide" class="slide"></section>
+  </main>
+
+  <script>
+    const slide = document.getElementById('slide');
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    let p = 0;
+
+    function render() {
+      const pages = [page1, page2, page3, page4, page5];
+      pages[p]();
+      prevBtn.disabled = p === 0;
+      nextBtn.disabled = p === pages.length - 1;
+    }
+
+    function page1() {
+      slide.innerHTML = `
+        <h2>第1页：printf 三种用法</h2>
+        <pre>printf("hello");
+printf("平均值为%.2lf", a);
+printf("平均值1为%.2lf，平均值2为%.3lf", a, b);</pre>
+        <p>核心：<b>格式串中的占位符</b>要和参数类型、参数个数一一对应。</p>
+      `;
+    }
+
+    function page2() {
+      slide.innerHTML = `
+        <h2>第2页：占位符速查</h2>
+        <table>
+          <tr><th>占位符</th><th>类型</th><th>说明</th><th>例子</th></tr>
+          <tr><td>%d</td><td>int</td><td>十进制整数</td><td>123</td></tr>
+          <tr><td>%2d</td><td>int</td><td>宽度2，前补空格</td><td>&nbsp;5</td></tr>
+          <tr><td>%02d</td><td>int</td><td>宽度2，前补0</td><td>05</td></tr>
+          <tr><td>%f / %lf</td><td>float/double</td><td>浮点数</td><td>3.141593</td></tr>
+          <tr><td>%.2lf</td><td>double</td><td>保留2位小数</td><td>3.14</td></tr>
+          <tr><td>%%</td><td>-</td><td>输出百分号</td><td>%</td></tr>
+          <tr><td>%c / %s</td><td>char / char*</td><td>字符/字符串</td><td>A / Hello</td></tr>
+          <tr><td>%x %X %o</td><td>int</td><td>16进制/8进制</td><td>ff FF 177</td></tr>
+        </table>
+      `;
+    }
+
+    function page3() {
+      slide.innerHTML = `
+        <h2>第3页：格式化互动演示</h2>
+        <div class="grid">
+          <div class="card">
+            <label>输入整数 n：</label>
+            <input id="nInput" value="5" />
+            <label style="margin-top:8px;display:block">输入小数 a：</label>
+            <input id="aInput" value="3.1415926" />
+            <button id="fmtBtn" style="margin-top:10px">生成输出</button>
+          </div>
+          <div class="card">
+            <div class="out" id="fmtOut">点击按钮查看结果</div>
+          </div>
+        </div>
+      `;
+      document.getElementById('fmtBtn').addEventListener('click', () => {
+        const n = Number(document.getElementById('nInput').value.trim());
+        const a = Number(document.getElementById('aInput').value.trim());
+        const out = document.getElementById('fmtOut');
+        if (!Number.isInteger(n) || Number.isNaN(a)) {
+          out.textContent = '输入错误：n 必须是整数，a 必须是数字';
+          return;
+        }
+        const padSpace = String(n).padStart(2, ' ');
+        const padZero = String(n).padStart(2, '0');
+        out.textContent = [
+          `printf("%d") => ${n}`,
+          `printf("%2d") => ${padSpace}`,
+          `printf("%02d") => ${padZero}`,
+          `printf("%.2lf") => ${a.toFixed(2)}`,
+          `printf("%%") => %`
+        ].join('\n');
+      });
+    }
+
+    function page4() {
+      slide.innerHTML = `
+        <h2>第4页：ASCII 关键区间</h2>
+        <ul>
+          <li>数字：48~57（'0'~'9'）</li>
+          <li>大写字母：65~90（'A'~'Z'）</li>
+          <li>小写字母：97~122（'a'~'z'）</li>
+          <li>记忆：<code>'a' - 'A' = 32</code></li>
+        </ul>
+        <div class="grid">
+          <div class="card">
+            <label>输入字符（1个）</label>
+            <input id="chInput" value="A" />
+            <button id="chBtn" style="margin-top:8px">转 ASCII</button>
+          </div>
+          <div class="card">
+            <label>输入十进制 ASCII</label>
+            <input id="numInput" value="97" />
+            <button id="numBtn" style="margin-top:8px">转字符</button>
+          </div>
+        </div>
+        <pre id="asciiOut">等待输入...</pre>
+      `;
+      const out = document.getElementById('asciiOut');
+      document.getElementById('chBtn').addEventListener('click', () => {
+        const ch = document.getElementById('chInput').value;
+        if (!ch) { out.textContent = '请输入字符'; return; }
+        out.textContent = `字符 '${ch[0]}' 的 ASCII(Dec) = ${ch.charCodeAt(0)}, Hex = ${ch.charCodeAt(0).toString(16).toUpperCase()}`;
+      });
+      document.getElementById('numBtn').addEventListener('click', () => {
+        const n = Number(document.getElementById('numInput').value.trim());
+        if (!Number.isInteger(n) || n < 0 || n > 127) { out.textContent = '请输入 0~127 的整数'; return; }
+        out.textContent = `ASCII ${n} 对应字符 = '${String.fromCharCode(n)}'`;
+      });
+    }
+
+    function page5() {
+      slide.innerHTML = `
+        <h2>第5页：易错点总结</h2>
+        <p>1) 占位符与参数类型不匹配（如 <code>%d</code> 接收了 <code>double</code>）。</p>
+        <p>2) 需要输出 <code>%</code> 时忘写 <code>%%</code>。</p>
+        <p>3) 把 ASCII 转换机械化，未判断是否在字母区间。</p>
+        <pre>课堂建议：先会用，再会讲原理，最后做边界检查。</pre>
+      `;
+    }
+
+    prevBtn.addEventListener('click', () => { if (p > 0) p--; render(); });
+    nextBtn.addEventListener('click', () => { if (p < 4) p++; render(); });
+    render();
+  </script>
+</body>
+</html>

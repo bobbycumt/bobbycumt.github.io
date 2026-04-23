@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>九九乘法表 - 嵌套循环交互动画</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #111827;
+      --line: #334155;
+      --text: #e5e7eb;
+      --muted: #94a3b8;
+      --accent: #22d3ee;
+      --active: #f59e0b;
+      --done: #34d399;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: radial-gradient(circle at top, #1e293b, #020617 70%);
+      color: var(--text);
+      font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+      display: flex;
+      justify-content: center;
+      padding: 24px;
+    }
+    .app {
+      width: min(1100px, 100%);
+      background: rgba(17, 24, 39, 0.95);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 20px;
+      box-shadow: 0 20px 48px rgba(0, 0, 0, .35);
+    }
+    h1 { margin: 0 0 8px; }
+    .desc {
+      color: var(--muted);
+      margin-bottom: 16px;
+      line-height: 1.7;
+    }
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    button {
+      border: 1px solid #475569;
+      background: #1e293b;
+      color: var(--text);
+      border-radius: 10px;
+      padding: 10px 14px;
+      cursor: pointer;
+    }
+    button:hover { border-color: var(--accent); }
+    .status, .code, .output, .log {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #020617;
+      padding: 12px;
+      margin-bottom: 10px;
+    }
+    .status { line-height: 1.8; }
+    .key { color: #7dd3fc; font-weight: 700; }
+    .val { color: #fde68a; font-weight: 700; }
+    pre {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.65;
+    }
+    .line.active { color: var(--active); font-weight: 700; }
+    .output {
+      min-height: 260px;
+      font-family: "Consolas", "Courier New", monospace;
+    }
+    .log {
+      max-height: 220px;
+      overflow: auto;
+      color: #d1d5db;
+      font-size: 14px;
+    }
+    .done { color: var(--done); font-weight: 700; }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <h1>九九乘法表（嵌套循环）交互动画</h1>
+    <div class="desc">
+      用“单步执行”观察外层 <code>i</code> 和内层 <code>j</code> 的变化，理解为什么第 <code>i</code> 行打印 <code>j=1..i</code>。 
+    </div>
+
+    <section class="controls">
+      <button id="initBtn">初始化</button>
+      <button id="stepBtn">单步执行</button>
+      <button id="autoBtn">自动播放</button>
+      <button id="resetBtn">重置</button>
+    </section>
+
+    <section class="status" id="status"></section>
+
+    <section class="code" id="code"></section>
+
+    <section class="output">
+      <pre id="out"></pre>
+    </section>
+
+    <section class="log" id="log"></section>
+  </main>
+
+  <script>
+    const initBtn = document.getElementById('initBtn');
+    const stepBtn = document.getElementById('stepBtn');
+    const autoBtn = document.getElementById('autoBtn');
+    const resetBtn = document.getElementById('resetBtn');
+
+    const statusEl = document.getElementById('status');
+    const codeEl = document.getElementById('code');
+    const outEl = document.getElementById('out');
+    const logEl = document.getElementById('log');
+
+    let timer = null;
+    let state = null;
+
+    const codeLines = [
+      'for (int i = 1; i <= 9; i++) {',
+      '    for (int j = 1; j <= i; j++) {',
+      '        printf("%d*%d=%2d", i, j, i*j);',
+      '        if (j != i) printf(" ");',
+      '    }',
+      '    printf("\\n");',
+      '}'
+    ];
+
+    function formatCell(i, j) {
+      const v = String(i * j).padStart(2, ' ');
+      return `${i}*${j}=${v}`;
+    }
+
+    function renderCode(activeIdx = -1) {
+      codeEl.innerHTML = '<pre>' + codeLines.map((line, idx) => {
+        const cls = idx === activeIdx ? 'line active' : 'line';
+        return `<div class="${cls}">${line.replaceAll('<', '&lt;').replaceAll('>', '&gt;')}</div>`;
+      }).join('') + '</pre>';
+    }
+
+    function render() {
+      if (!state) return;
+      statusEl.innerHTML = `
+        <span class="key">阶段：</span><span class="val">${state.phase}</span><br/>
+        <span class="key">当前 i：</span><span class="val">${state.i ?? '-'} </span>
+        <span class="key">当前 j：</span><span class="val">${state.j ?? '-'} </span>
+      `;
+      outEl.textContent = state.lines.join('\n') + (state.currentLine ? (state.lines.length ? '\n' : '') + state.currentLine : '');
+      logEl.innerHTML = state.logs.map(x => `<div>${x}</div>`).join('');
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function pushLog(msg) {
+      state.logs.push(msg);
+      if (state.logs.length > 120) state.logs.shift();
+    }
+
+    function init() {
+      stopAuto();
+      state = {
+        i: 1,
+        j: 1,
+        lines: [],
+        currentLine: '',
+        phase: '准备开始',
+        done: false,
+        rowStarted: false,
+        logs: ['初始化完成：准备进入外层循环 i=1。']
+      };
+      renderCode(-1);
+      render();
+    }
+
+    function step() {
+      if (!state) init();
+      if (state.done) return;
+
+      if (state.i > 9) {
+        state.phase = '执行结束';
+        state.done = true;
+        pushLog('<span class="done">全部 9 行输出完成。</span>');
+        renderCode(-1);
+        render();
+        stopAuto();
+        return;
+      }
+
+      if (!state.rowStarted) {
+        state.phase = `进入第 ${state.i} 行（外层循环）`;
+        pushLog(`外层循环：i=${state.i}，开始新的一行。`);
+        state.rowStarted = true;
+        renderCode(0);
+        render();
+        return;
+      }
+
+      if (state.j <= state.i) {
+        const cell = formatCell(state.i, state.j);
+        state.phase = `打印第 ${state.i} 行第 ${state.j} 个算式`;
+        pushLog(`内层循环：j=${state.j}，输出 ${cell}`);
+        state.currentLine += cell;
+
+        renderCode(2);
+
+        if (state.j !== state.i) {
+          state.currentLine += ' ';
+          renderCode(3);
+        }
+
+        state.j++;
+        render();
+        return;
+      }
+
+      state.phase = `第 ${state.i} 行结束，换行`;
+      state.lines.push(state.currentLine);
+      state.currentLine = '';
+      pushLog(`第 ${state.i} 行打印完毕，执行换行。`);
+      renderCode(5);
+
+      state.i++;
+      state.j = 1;
+      state.rowStarted = false;
+
+      if (state.i > 9) {
+        state.phase = '执行结束';
+        state.done = true;
+        pushLog('<span class="done">全部 9 行输出完成。</span>');
+        stopAuto();
+      }
+      render();
+    }
+
+    function autoPlay() {
+      if (!state) init();
+      if (timer) {
+        stopAuto();
+        return;
+      }
+      autoBtn.textContent = '暂停播放';
+      timer = setInterval(() => {
+        step();
+        if (state?.done) stopAuto();
+      }, 650);
+    }
+
+    function stopAuto() {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+      autoBtn.textContent = '自动播放';
+    }
+
+    initBtn.addEventListener('click', init);
+    stepBtn.addEventListener('click', step);
+    autoBtn.addEventListener('click', autoPlay);
+    resetBtn.addEventListener('click', init);
+
+    init();
+  </script>
+</body>
+</html>

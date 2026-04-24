@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>赋值自增与类型转换 - 交互PPT</title>
+  <style>
+    :root {
+      --bg: #f6f8ff;
+      --card: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --primary: #2563eb;
+      --ok: #059669;
+      --warn: #dc2626;
+      --border: #dbe3ff;
+    }
+    body {
+      margin: 0;
+      font-family: "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+      background: linear-gradient(120deg, #eef2ff 0%, #f8fafc 100%);
+      color: var(--text);
+    }
+    .wrap { max-width: 980px; margin: 28px auto; padding: 0 16px; }
+    .title { font-size: 28px; font-weight: 800; margin-bottom: 6px; }
+    .sub { color: var(--muted); margin-bottom: 16px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px;
+      box-shadow: 0 12px 30px rgba(37,99,235,.08);
+      min-height: 360px;
+    }
+    .slide { display: none; }
+    .slide.active { display: block; }
+    h2 { margin: 4px 0 12px; }
+    ul { line-height: 1.9; }
+    code { background: #fff1f2; color: #b91c1c; padding: 2px 6px; border-radius: 6px; }
+    .controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 14px;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .btn {
+      border: none;
+      border-radius: 10px;
+      padding: 10px 14px;
+      background: var(--primary);
+      color: #fff;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .btn[disabled] { opacity: .45; cursor: not-allowed; }
+    .btn.secondary { background: #475569; }
+    .step {
+      margin-top: 10px;
+      padding: 10px;
+      border: 1px dashed #c7d2fe;
+      border-radius: 10px;
+      background: #f8faff;
+      white-space: pre-wrap;
+      line-height: 1.7;
+    }
+    .good { color: var(--ok); font-weight: 700; }
+    .bad { color: var(--warn); font-weight: 700; }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    th, td { border: 1px solid #e5e7eb; padding: 8px; text-align: left; }
+    th { background: #f8fafc; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="title">赋值、自增与类型转换</div>
+    <div class="sub">交互式 PPT：按“下一页”推进，部分页面支持“单步演示”。</div>
+
+    <div class="card">
+      <section class="slide active">
+        <h2>1. 学习目标</h2>
+        <ul>
+          <li>理解 <code>=</code> 是“赋值覆盖”，不是数学等号。</li>
+          <li>掌握 <code>+= -= *= /= %=</code> 的等价写法。</li>
+          <li>分清 <code>++a</code> 与 <code>a++</code> 的执行时机。</li>
+          <li>掌握隐式/强制类型转换，规避整数除法陷阱。</li>
+        </ul>
+      </section>
+
+      <section class="slide">
+        <h2>2. 赋值与复合运算</h2>
+        <table>
+          <thead><tr><th>写法</th><th>等价形式</th><th>说明</th></tr></thead>
+          <tbody>
+            <tr><td><code>a += b</code></td><td><code>a = a + b</code></td><td>加后写回</td></tr>
+            <tr><td><code>a *= b + 3</code></td><td><code>a = a * (b + 3)</code></td><td>右侧是整体</td></tr>
+          </tbody>
+        </table>
+        <p class="good">口诀：先算右边，再写左边。</p>
+      </section>
+
+      <section class="slide">
+        <h2>3. 前置/后置自增单步演示</h2>
+        <button class="btn" id="stepInc">单步执行</button>
+        <button class="btn secondary" id="resetInc">重置</button>
+        <div class="step" id="incBox"></div>
+      </section>
+
+      <section class="slide">
+        <h2>4. 类型转换与除法陷阱</h2>
+        <button class="btn" id="stepType">单步执行</button>
+        <button class="btn secondary" id="resetType">重置</button>
+        <div class="step" id="typeBox"></div>
+      </section>
+
+      <section class="slide">
+        <h2>5. 综合练习答案</h2>
+        <p><code>int x = 10; int y = x++; y += ++x;</code></p>
+        <ul>
+          <li>第一步：<code>y = x++</code> 后，<code>y=10</code>, <code>x=11</code>。</li>
+          <li>第二步：<code>y += ++x</code>，先 <code>x=12</code>，再 <code>y=10+12=22</code>。</li>
+        </ul>
+        <p class="good">最终：<code>x=12</code>，<code>y=22</code></p>
+        <p class="bad">避坑：不要在复杂表达式中堆叠多个自增。</p>
+      </section>
+    </div>
+
+    <div class="controls">
+      <div>
+        <button class="btn secondary" id="prevBtn">上一页</button>
+        <button class="btn" id="nextBtn">下一页</button>
+      </div>
+      <div id="pageText">1 / 5</div>
+    </div>
+  </div>
+
+  <script>
+    const slides = Array.from(document.querySelectorAll('.slide'));
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const pageText = document.getElementById('pageText');
+    let idx = 0;
+
+    function renderSlide() {
+      slides.forEach((s, i) => s.classList.toggle('active', i === idx));
+      pageText.textContent = `${idx + 1} / ${slides.length}`;
+      prevBtn.disabled = idx === 0;
+      nextBtn.disabled = idx === slides.length - 1;
+    }
+    prevBtn.addEventListener('click', () => { if (idx > 0) { idx--; renderSlide(); }});
+    nextBtn.addEventListener('click', () => { if (idx < slides.length - 1) { idx++; renderSlide(); }});
+
+    const incSteps = [
+      '初始：int a = 5;\n执行：int b = ++a;\n说明：前置自增，先变后用。',
+      '结果：a 从 5 变 6，然后 b = 6。',
+      '重置后看后置：int p = 5; int q = p++;\n说明：先用后变。',
+      '结果：q = 5，随后 p 才变为 6。'
+    ];
+    let incIdx = 0;
+    const incBox = document.getElementById('incBox');
+    function renderInc() { incBox.textContent = incSteps[Math.min(incIdx, incSteps.length - 1)]; }
+    document.getElementById('stepInc').addEventListener('click', () => {
+      if (incIdx < incSteps.length - 1) incIdx++;
+      renderInc();
+    });
+    document.getElementById('resetInc').addEventListener('click', () => { incIdx = 0; renderInc(); });
+    renderInc();
+
+    const typeSteps = [
+      '整数除法：5 / 2 = 2（小数被截断）',
+      '浮点参与：5 / 2.0 = 2.5（自动提升类型）',
+      '强制转换：(int)3.98 = 3（直接截断，不四舍五入）',
+      '复习：char -> int -> float -> double（隐式提升链）'
+    ];
+    let typeIdx = 0;
+    const typeBox = document.getElementById('typeBox');
+    function renderType() { typeBox.textContent = typeSteps[Math.min(typeIdx, typeSteps.length - 1)]; }
+    document.getElementById('stepType').addEventListener('click', () => {
+      if (typeIdx < typeSteps.length - 1) typeIdx++;
+      renderType();
+    });
+    document.getElementById('resetType').addEventListener('click', () => { typeIdx = 0; renderType(); });
+    renderType();
+
+    renderSlide();
+  </script>
+</body>
+</html>

@@ -1,7 +1,7 @@
 ---
 title: 动态规划
 parent: 算法
-nav_order: 6
+nav_order: 7
 has_children: true
 ---
 

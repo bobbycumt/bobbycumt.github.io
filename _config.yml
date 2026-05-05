@@ -21,3 +21,7 @@ defaults:
     values:
       layout: default
       nav_order: 1
+
+# 全局主题配置（可统一控制默认深浅色）
+site_theme:
+  default_mode: light # 可改为 dark
